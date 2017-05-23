@@ -1,52 +1,43 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Tests for ``txkube.network_kubernetes``.
 
 See ``get_kubernetes`` for pre-requisites.
 """
 
-from os import environ
 from base64 import b64encode
+from os import environ
 
+import attr
+from eliot.testing import capture_logging
+from OpenSSL.crypto import FILETYPE_PEM
+from testtools.matchers import AnyMatch, ContainsDict, Equals
+from twisted.internet.endpoints import SSL4ServerEndpoint
+from twisted.internet.interfaces import IReactorSSL
+from twisted.internet.ssl import (
+    DN,
+    CertificateOptions,
+    KeyPair,
+    trustRootFromCertificates,
+)
+from twisted.python.components import proxyForInterface
+from twisted.python.filepath import FilePath
+from twisted.python.url import URL
+from twisted.test.proto_helpers import MemoryReactor
+from twisted.trial.unittest import TestCase as TwistedTestCase
+from twisted.web.client import Agent
+from twisted.web.resource import Resource
+from twisted.web.server import Site
+from twisted.web.static import Data
+from yaml import safe_dump
 from zope.interface import implementer
 from zope.interface.verify import verifyClass
 
-import attr
-
-from yaml import safe_dump
-
-from testtools.matchers import AnyMatch, ContainsDict, Equals
-
-from eliot.testing import capture_logging
-
-from OpenSSL.crypto import FILETYPE_PEM
-
-from twisted.test.proto_helpers import MemoryReactor
-from twisted.trial.unittest import TestCase as TwistedTestCase
-
-from twisted.python.filepath import FilePath
-from twisted.python.url import URL
-from twisted.python.components import proxyForInterface
-from twisted.internet.ssl import (
-    CertificateOptions, DN, KeyPair, trustRootFromCertificates,
-)
-from twisted.internet.interfaces import IReactorSSL
-from twisted.internet.endpoints import SSL4ServerEndpoint
-from twisted.web.client import Agent
-from twisted.web.server import Site
-from twisted.web.resource import Resource
-from twisted.web.static import Data
-
+from .. import IObject, network_kubernetes, network_kubernetes_from_context, v1
+from .._network import collection_location
 from ..testing import TestCase
 from ..testing.integration import kubernetes_client_tests
-
-from .. import (
-    IObject, v1, network_kubernetes, network_kubernetes_from_context,
-)
-
-from .._network import collection_location
 
 
 def get_kubernetes(case):
@@ -67,19 +58,23 @@ def get_kubernetes(case):
         return network_kubernetes_from_context(reactor, context)
 
 
-class KubernetesClientIntegrationTests(kubernetes_client_tests(get_kubernetes)):
+class KubernetesClientIntegrationTests(
+    kubernetes_client_tests(get_kubernetes)
+):
     """
     Integration tests which interact with a network-accessible
     Kubernetes deployment via ``txkube.network_kubernetes``.
     """
 
 
-
 class CollectionLocationTests(TestCase):
     """
     Tests for ``collection_location``.
     """
-    def _test_collection_location(self, version, kind, expected, namespace, instance):
+
+    def _test_collection_location(
+        self, version, kind, expected, namespace, instance
+    ):
         """
         Verify that ``collection_location`` for a particular version, kind,
         namespace, and Python object.
@@ -98,6 +93,7 @@ class CollectionLocationTests(TestCase):
         """
         k = kind
         n = namespace
+
         @implementer(IObject)
         class Mythical(object):
             apiVersion = version
@@ -120,7 +116,6 @@ class CollectionLocationTests(TestCase):
             Equals(expected),
         )
 
-
     def test_v1_type(self):
         """
         ``collection_location`` returns a tuple representing an URL path like
@@ -128,11 +123,12 @@ class CollectionLocationTests(TestCase):
         *v1* Kubernetes object kind.
         """
         self._test_collection_location(
-            u"v1", u"Mythical", (u"api", u"v1", u"mythicals"),
+            u"v1",
+            u"Mythical",
+            (u"api", u"v1", u"mythicals"),
             namespace=None,
             instance=False,
         )
-
 
     def test_v1_instance(self):
         """
@@ -141,12 +137,12 @@ class CollectionLocationTests(TestCase):
         ``IObject`` provider representing Kubernetes object of a *v1* kind.
         """
         self._test_collection_location(
-            u"v1", u"Mythical",
+            u"v1",
+            u"Mythical",
             (u"api", u"v1", u"namespaces", u"ns", u"mythicals"),
             namespace=u"ns",
             instance=True,
         )
-
 
     def test_v1beta1_type(self):
         """
@@ -155,12 +151,12 @@ class CollectionLocationTests(TestCase):
         implementation of a *v1beta1* Kubernetes object kind.
         """
         self._test_collection_location(
-            u"v1beta1", u"Mythical",
+            u"v1beta1",
+            u"Mythical",
             (u"apis", u"extensions", u"v1beta1", u"mythicals"),
             namespace=None,
             instance=False,
         )
-
 
     def test_v1beta1_instance(self):
         """
@@ -169,9 +165,12 @@ class CollectionLocationTests(TestCase):
         implementation of a *v1beta1* Kubernetes object kind.
         """
         self._test_collection_location(
-            u"v1beta1", u"Mythical",
-            (u"apis", u"extensions", u"v1beta1", u"namespaces", u"ns",
-             u"mythicals"),
+            u"v1beta1",
+            u"Mythical",
+            (
+                u"apis", u"extensions", u"v1beta1", u"namespaces", u"ns",
+                u"mythicals"
+            ),
             namespace=u"ns",
             instance=True,
         )
@@ -203,17 +202,18 @@ class ExtraNetworkClientTests(TestCase):
         client.list(v1.Pod)
 
 
-
 class NetworkKubernetesFromContextTests(TwistedTestCase):
     """
     Direct tests for ``network_kubernetes_from_context``.
     """
+
     def test_client_chain_certificate(self):
         """
         A certificate chain in the *client-certificate* section of in the kube
         configuration file is used to configure the TLS context used when
         connecting to the API server.
         """
+
         def sign_ca_cert(key, requestObject, dn):
             from OpenSSL.crypto import X509, X509Extension
             from twisted.internet.ssl import Certificate
@@ -226,12 +226,16 @@ class NetworkKubernetesFromContextTests(TwistedTestCase):
             cert.gmtime_adj_notBefore(0)
             cert.gmtime_adj_notAfter(60 * 60)
             cert.set_serial_number(1)
-            cert.add_extensions([
-                X509Extension(b"basicConstraints", True, b"CA:TRUE"),
-                # Not necessarily a good way to populate subjectAltName but it
-                # quiets the deprecation warning we get from service_identity.
-                X509Extension(b"subjectAltName", True, b"DNS:" + dn.commonName),
-            ])
+            cert.add_extensions(
+                [
+                    X509Extension(b"basicConstraints", True, b"CA:TRUE"),
+                    # Not necessarily a good way to populate subjectAltName but it
+                    # quiets the deprecation warning we get from service_identity.
+                    X509Extension(
+                        b"subjectAltName", True, b"DNS:" + dn.commonName
+                    ),
+                ]
+            )
             cert.sign(key.original, "sha256")
             return Certificate(cert)
 
@@ -240,31 +244,44 @@ class NetworkKubernetesFromContextTests(TwistedTestCase):
         ca_cert = sign_ca_cert(ca_key, ca_req, DN(commonName="kubernetes"))
 
         intermediate_key = KeyPair.generate()
-        intermediate_req = intermediate_key.requestObject(DN(commonName="intermediate"))
-        intermediate_cert = sign_ca_cert(ca_key, intermediate_req, DN(commonName="kubernetes"))
+        intermediate_req = intermediate_key.requestObject(
+            DN(commonName="intermediate")
+        )
+        intermediate_cert = sign_ca_cert(
+            ca_key, intermediate_req, DN(commonName="kubernetes")
+        )
 
         client_key = KeyPair.generate()
         client_req = client_key.requestObject(DN(commonName="client"))
-        client_cert = intermediate_key.signRequestObject(DN(commonName="intermediate"), client_req, 1)
+        client_cert = intermediate_key.signRequestObject(
+            DN(commonName="intermediate"), client_req, 1
+        )
 
-        chain = b"".join([
-            client_cert.dumpPEM(),
-            intermediate_cert.dumpPEM(),
-        ])
+        chain = b"".join(
+            [
+                client_cert.dumpPEM(),
+                intermediate_cert.dumpPEM(),
+            ]
+        )
 
         FilePath("ca.key").setContent(ca_key.dump(FILETYPE_PEM))
         FilePath("ca.crt").setContent(ca_cert.dump(FILETYPE_PEM))
-        FilePath("intermediate.crt").setContent(intermediate_cert.dump(FILETYPE_PEM))
+        FilePath("intermediate.crt"
+                 ).setContent(intermediate_cert.dump(FILETYPE_PEM))
         FilePath("client.key").setContent(client_key.dump(FILETYPE_PEM))
         FilePath("client.crt").setContent(client_cert.dump(FILETYPE_PEM))
         FilePath("chain.crt").setContent(chain)
 
         config = self.write_config(ca_cert, chain, client_key)
-        kubernetes = lambda reactor: network_kubernetes_from_context(
-            reactor, "foo-ctx", path=config,
-        )
-        return self.check_tls_config(ca_key, ca_cert, kubernetes)
 
+        def kubernetes(reactor):
+            return network_kubernetes_from_context(
+                reactor,
+                "foo-ctx",
+                path=config,
+            )
+
+        return self.check_tls_config(ca_key, ca_cert, kubernetes)
 
     def check_tls_config(self, ca_key, ca_cert, get_kubernetes):
         """
@@ -300,14 +317,15 @@ class NetworkKubernetesFromContextTests(TwistedTestCase):
         agent = client.agent
 
         d = endpoint.listen(Site(root))
+
         def listening(port):
             self.addCleanup(port.stopListening)
             redirectable.set_redirect(port.getHost().host, port.getHost().port)
             url = b"https://127.0.0.1:8443/"
             return agent.request(b"GET", url)
+
         d.addCallback(listening)
         return d
-
 
     def write_config(self, ca_cert, chain, client_key):
         """
@@ -326,38 +344,46 @@ class NetworkKubernetesFromContextTests(TwistedTestCase):
         :return FilePath: The path to the written configuration file.
         """
         config = FilePath(self.mktemp())
-        config.setContent(safe_dump({
-            "apiVersion": "v1",
-            "contexts": [
+        config.setContent(
+            safe_dump(
                 {
-                    "name": "foo-ctx",
-                    "context": {
-                        "cluster": "foo-cluster",
-                        "user": "foo-user",
-                    },
-                },
-            ],
-            "clusters": [
-                {
-                    "name": "foo-cluster",
-                    "cluster": {
-                        "certificate-authority-data": b64encode(ca_cert.dump(FILETYPE_PEM)),
-                        "server": "https://127.0.0.1:8443/",
-                    },
-                },
-            ],
-            "users": [
-                {
-                    "name": "foo-user",
-                    "user": {
-                        "client-certificate-data": b64encode(chain),
-                        "client-key-data": b64encode(client_key.dump(FILETYPE_PEM)),
-                    },
-                },
-            ],
-        }))
+                    "apiVersion":
+                    "v1",
+                    "contexts": [
+                        {
+                            "name": "foo-ctx",
+                            "context": {
+                                "cluster": "foo-cluster",
+                                "user": "foo-user",
+                            },
+                        },
+                    ],
+                    "clusters": [
+                        {
+                            "name": "foo-cluster",
+                            "cluster": {
+                                "certificate-authority-data":
+                                b64encode(ca_cert.dump(FILETYPE_PEM)),
+                                "server":
+                                "https://127.0.0.1:8443/",
+                            },
+                        },
+                    ],
+                    "users": [
+                        {
+                            "name": "foo-user",
+                            "user": {
+                                "client-certificate-data":
+                                b64encode(chain),
+                                "client-key-data":
+                                b64encode(client_key.dump(FILETYPE_PEM)),
+                            },
+                        },
+                    ],
+                }
+            )
+        )
         return config
-
 
 
 @attr.s
@@ -376,7 +402,6 @@ class Redirectable(proxyForInterface(IReactorSSL)):
         Specify the alternate address to which connections will be directed.
         """
         self.host, self.port = host, port
-
 
     def connectSSL(self, host, port, *a, **kw):
         """

@@ -1,24 +1,23 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Tests for ``txkube.memory_kubernetes``.
 """
 
-from zope.interface.verify import verifyClass
-
 from hypothesis import given
-
-from testtools.matchers import Equals, Is, IsInstance, AfterPreprocessing
-
-from ..testing.integration import kubernetes_client_tests
-from ..testing.strategies import iobjects
-from ..testing import TestCase
+from testtools.matchers import AfterPreprocessing, Equals, Is, IsInstance
+from zope.interface.verify import verifyClass
 
 from .. import memory_kubernetes
 from .._memory import (
-    _KubernetesState, IAgency, NullAgency, _incrementResourceVersion,
+    IAgency,
+    NullAgency,
+    _incrementResourceVersion,
+    _KubernetesState,
 )
+from ..testing import TestCase
+from ..testing.integration import kubernetes_client_tests
+from ..testing.strategies import iobjects
 
 
 def get_kubernetes(case):
@@ -28,25 +27,25 @@ def get_kubernetes(case):
     return memory_kubernetes()
 
 
-
-class KubernetesClientIntegrationTests(kubernetes_client_tests(get_kubernetes)):
+class KubernetesClientIntegrationTests(
+    kubernetes_client_tests(get_kubernetes)
+):
     """
     Integration tests which interact with an in-memory-only Kubernetes
     deployment via ``txkube.memory_kubernetes``.
     """
 
 
-
 class NullAgencyTests(TestCase):
     """
     Tests for ``NullAgency``.
     """
+
     def test_interface(self):
         """
         ``NullAgency`` implements ``IAgency``.
         """
         verifyClass(IAgency, NullAgency)
-
 
     @given(iobjects())
     def test_before_create(self, obj):
@@ -58,7 +57,6 @@ class NullAgencyTests(TestCase):
         actual = NullAgency().before_create(state, obj)
         self.assertThat(actual, Equals(obj))
 
-
     @given(iobjects())
     def test_after_create(self, obj):
         """
@@ -68,7 +66,6 @@ class NullAgencyTests(TestCase):
         state = _KubernetesState()
         actual = NullAgency().after_create(state, obj)
         self.assertThat(actual, Equals(obj))
-
 
     @given(iobjects(), iobjects())
     def test_before_replace(self, old, new):
@@ -80,11 +77,11 @@ class NullAgencyTests(TestCase):
         self.assertThat(actual, Is(None))
 
 
-
 class IncrementResourceVersionTests(TestCase):
     """
     Tests for ``_incrementResourceVersion``.
     """
+
     def test_missing(self):
         """
         The next version after ``None`` is ``u"1"``.
@@ -92,7 +89,6 @@ class IncrementResourceVersionTests(TestCase):
         version = _incrementResourceVersion(None)
         self.expectThat(version, IsInstance(unicode))
         self.expectThat(version, Equals(u"1"))
-
 
     def test_incremented(self):
         """
@@ -102,4 +98,6 @@ class IncrementResourceVersionTests(TestCase):
         version = _incrementResourceVersion(_incrementResourceVersion(None))
         updated = _incrementResourceVersion(version)
         self.expectThat(updated, IsInstance(unicode))
-        self.expectThat(updated, AfterPreprocessing(int, Equals(int(version) + 1)))
+        self.expectThat(
+            updated, AfterPreprocessing(int, Equals(int(version) + 1))
+        )

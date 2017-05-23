@@ -1,34 +1,35 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Tests for ``txkube.testing.matchers``.
 """
 
 import attr
-
 from pyrsistent import PClass, field
-
-from testtools.matchers import Is, Equals
+from testtools.matchers import Equals, Is
 
 from .. import TestCase
-from ..matchers import MappingEquals, AttrsEquals, PClassEquals
+from ..matchers import AttrsEquals, MappingEquals, PClassEquals
 
 
 class MappingEqualsTests(TestCase):
     """
     Tests for ``MappingEquals``.
     """
+
     def test_equals(self):
         """
         ``MappingEquals.match`` returns ``None`` when comparing two ``dict`` which
         compare equal with ``==``.
         """
         self.assertThat(
-            MappingEquals({u"foo": u"bar"}).match({u"foo": u"bar"}),
+            MappingEquals({
+                u"foo": u"bar"
+            }).match({
+                u"foo": u"bar"
+            }),
             Is(None),
         )
-
 
     def test_mismatch(self):
         """
@@ -89,15 +90,14 @@ class MappingEqualsTests(TestCase):
         )
 
 
-
 class AttrsEqualsTests(TestCase):
     """
     Tests for ``AttrsEquals``.
     """
+
     @attr.s
     class attrs(object):
         foo = attr.ib()
-
 
     def test_equals(self):
         """
@@ -108,7 +108,6 @@ class AttrsEqualsTests(TestCase):
             AttrsEquals(self.attrs(u"bar")).match(self.attrs(u"bar")),
             Is(None),
         )
-
 
     def test_mismatch(self):
         """
@@ -145,15 +144,14 @@ class AttrsEqualsTests(TestCase):
         )
 
 
-
 class PClassEqualsTests(TestCase):
     """
     Tests for ``PClassEquals``.
     """
+
     class pclass(PClass):
         foo = field()
         bar = field()
-
 
     def test_equals(self):
         """
@@ -161,10 +159,10 @@ class PClassEqualsTests(TestCase):
         instances which compare equal with ``==``.
         """
         self.assertThat(
-            PClassEquals(self.pclass(foo=u"bar")).match(self.pclass(foo=u"bar")),
+            PClassEquals(self.pclass(foo=u"bar"))
+            .match(self.pclass(foo=u"bar")),
             Is(None),
         )
-
 
     def test_mismatch(self):
         """
@@ -172,7 +170,8 @@ class PClassEqualsTests(TestCase):
         which do not compare equal with ``==``.
         """
         # Same attributes, different value.
-        mismatch = PClassEquals(self.pclass(foo=u"bar")).match(self.pclass(foo=u"baz"))
+        mismatch = PClassEquals(self.pclass(foo=u"bar")
+                                ).match(self.pclass(foo=u"baz"))
         self.expectThat(
             mismatch.describe(),
             Equals(

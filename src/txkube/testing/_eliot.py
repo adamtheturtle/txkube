@@ -1,6 +1,5 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Integration between Eliot, eliottree, and testtools to provide easily
 readable Eliot logs for failing tests.
@@ -8,11 +7,9 @@ readable Eliot logs for failing tests.
 
 from io import BytesIO
 
-from fixtures import Fixture
-
 from eliot import add_destination, remove_destination
 from eliottree import Tree, render_task_nodes
-
+from fixtures import Fixture
 from testtools.content import Content
 from testtools.content_type import UTF8_TEXT
 
@@ -37,7 +34,6 @@ def _eliottree(logs):
         field_limit=0,
     )
     return out.getvalue()
-
 
 
 class CaptureEliotLogs(Fixture):

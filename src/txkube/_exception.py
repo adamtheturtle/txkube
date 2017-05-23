@@ -3,8 +3,8 @@
 
 from json import loads
 
-from twisted.web.http import NOT_FOUND, CONFLICT
 from twisted.web.client import readBody
+from twisted.web.http import CONFLICT, NOT_FOUND
 
 
 def _full_kind(details):
@@ -20,7 +20,6 @@ def _full_kind(details):
     return kind
 
 
-
 class KubernetesError(Exception):
     """
     Kubernetes has returned an error for some attempted operation.
@@ -28,6 +27,7 @@ class KubernetesError(Exception):
     :ivar int code: The HTTP response code.
     :ivar Status status: The *v1.Status* returned in the response.
     """
+
     def __init__(self, code, status):
         self.code = code
         self.status = status
@@ -42,7 +42,8 @@ class KubernetesError(Exception):
             v1.Status(
                 status=u"Failure",
                 message=u'{kind} "{name}" not found'.format(
-                    kind=kind, name=details[u"name"],
+                    kind=kind,
+                    name=details[u"name"],
                 ),
                 reason=u"NotFound",
                 details=details,
@@ -61,7 +62,8 @@ class KubernetesError(Exception):
             v1.Status(
                 status=u"Failure",
                 message=u'{kind} "{name}" already exists'.format(
-                    kind=kind, name=details[u"name"],
+                    kind=kind,
+                    name=details[u"name"],
                 ),
                 reason=u"AlreadyExists",
                 details=details,
@@ -91,7 +93,6 @@ class KubernetesError(Exception):
             ),
         )
 
-
     @classmethod
     def from_response(cls, response):
         """
@@ -111,17 +112,18 @@ class KubernetesError(Exception):
         # This is usually what happens with the expose-it-through-__init__
         # style, I guess.
         from ._model import iobject_from_raw
-        d.addCallback(lambda body: cls(response.code, iobject_from_raw(loads(body))))
+        d.addCallback(
+            lambda body: cls(response.code, iobject_from_raw(loads(body)))
+        )
         return d
-
 
     def __repr__(self):
         return "<KubernetesError: code = {}; status = {}>".format(
-            self.code, self.status,
+            self.code,
+            self.status,
         )
 
     __str__ = __repr__
-
 
 
 class UnrecognizedVersion(ValueError):
@@ -131,11 +133,11 @@ class UnrecognizedVersion(ValueError):
     :ivar unicode apiVersion: The API version encountered.
     :ivar object obj: The whole marshalled object.
     """
+
     def __init__(self, apiVersion, obj):
         ValueError.__init__(self, apiVersion)
         self.apiVersion = apiVersion
         self.obj = obj
-
 
 
 class UnrecognizedKind(ValueError):
@@ -146,6 +148,7 @@ class UnrecognizedKind(ValueError):
     :ivar unicode kind: The object kind encountered.
     :ivar object obj: The whole marshalled object.
     """
+
     def __init__(self, apiVersion, kind, obj):
         ValueError.__init__(self, apiVersion, kind)
         self.apiVersion = apiVersion

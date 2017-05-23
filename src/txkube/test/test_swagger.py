@@ -1,34 +1,43 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Tests for ``txkube._swagger``.
 """
 
 from datetime import datetime
 
-from hypothesis import given
-from hypothesis.strategies import sampled_from, integers
-
 from eliot import Message
-
+from hypothesis import given
+from hypothesis.strategies import integers, sampled_from
 from pyrsistent import (
-    InvariantException, CheckedKeyTypeError, CheckedValueTypeError,
-    PTypeError, PClass, freeze,
+    CheckedKeyTypeError,
+    CheckedValueTypeError,
+    InvariantException,
+    PClass,
+    PTypeError,
+    freeze,
 )
-
+from testtools.matchers import (
+    AfterPreprocessing,
+    Equals,
+    Is,
+    IsInstance,
+    MatchesAll,
+    MatchesPredicate,
+    MatchesStructure,
+    Raises,
+    raises,
+)
 from twisted.python.filepath import FilePath
 
-from testtools.matchers import (
-    Equals, MatchesPredicate, MatchesStructure, Raises,
-    IsInstance, MatchesAll, AfterPreprocessing, Is, raises,
-)
-
 from .._swagger import (
-    NotClassLike, Swagger, _IntegerRange,
-    UsePrefix, PClasses, VersionedPClasses,
+    NotClassLike,
+    PClasses,
+    Swagger,
+    UsePrefix,
+    VersionedPClasses,
+    _IntegerRange,
 )
-
 from ..testing import TestCase
 
 
@@ -36,27 +45,30 @@ def swagger_primitive_types():
     """
     Hypothesis strategy to build Swagger *primitive* type definitions.
     """
+
     def _swaggered((t, f)):
         result = {u"type": t}
         if f is not None:
             result[u"format"] = f
         return result
 
-    return sampled_from([
-        (u"integer", u"int32"),
-        (u"integer", u"int64"),
-        (u"string", None),
-        (u"string", u"byte"),
-        (u"string", u"date-time"),
-        (u"boolean", None),
-    ]).map(_swaggered)
-
+    return sampled_from(
+        [
+            (u"integer", u"int32"),
+            (u"integer", u"int64"),
+            (u"string", None),
+            (u"string", u"byte"),
+            (u"string", u"date-time"),
+            (u"boolean", None),
+        ]
+    ).map(_swaggered)
 
 
 class _IntegerRangeTests(TestCase):
     """
     Tests for ``_IntegerRange``.
     """
+
     def test_from_signed_bits(self):
         """
         ``_IntegerRange.from_signed_bits`` returns an ``_IntegerRange`` with lower
@@ -65,7 +77,6 @@ class _IntegerRangeTests(TestCase):
         """
         r = _IntegerRange.from_signed_bits(4)
         self.assertThat(r, Equals(_IntegerRange(min=-8, max=7)))
-
 
     def test_from_unsigned_bits(self):
         """
@@ -77,7 +88,6 @@ class _IntegerRangeTests(TestCase):
         self.assertThat(r, Equals(_IntegerRange(min=0, max=15)))
 
 
-
 class SwaggerTests(TestCase):
     spec_document = {
         u"definitions": {
@@ -85,8 +95,7 @@ class SwaggerTests(TestCase):
                 u"type": u"string",
             },
             u"optional-description": {
-                u"properties": {
-                },
+                u"properties": {},
             },
             u"boolean": {
                 u"description": u"has type boolean",
@@ -170,7 +179,8 @@ class SwaggerTests(TestCase):
                 },
             },
             u"object-with-simple-ref": {
-                u"description": u"has type object and $ref with simple type target",
+                u"description":
+                u"has type object and $ref with simple type target",
                 u"properties": {
                     u"p": {
                         u"$ref": u"#/definitions/simple-type",
@@ -178,7 +188,8 @@ class SwaggerTests(TestCase):
                 },
             },
             u"object-with-complex-ref": {
-                u"description": u"has type object and $ref with type target of another class",
+                u"description":
+                u"has type object and $ref with type target of another class",
                 u"properties": {
                     u"p": {
                         u"$ref": u"#/definitions/object-with-simple-ref",
@@ -206,37 +217,37 @@ class SwaggerTests(TestCase):
         super(SwaggerTests, self).setUp()
         self.spec = Swagger.from_document(self.spec_document)
 
-
     def test_simple_type(self):
         self.assertThat(
             lambda: self.spec.pclass_for_definition(u"simple-type"),
             raises_exception(
                 NotClassLike,
-                args=(u"simple-type", {u"type": u"string"}),
+                args=(u"simple-type", {
+                    u"type": u"string"
+                }),
             ),
         )
-
 
     def test_optional_description(self):
         Type = self.spec.pclass_for_definition(u"optional-description")
         self.assertThat(Type(), IsInstance(Type))
 
-
     @given(swagger_primitive_types())
     def test_nonrequired_none_default(self, swagger_type):
-        spec = Swagger.from_document({
-            u"definitions": {
-                u"object": {
-                    u"properties": {
-                        u"o": swagger_type,
+        spec = Swagger.from_document(
+            {
+                u"definitions": {
+                    u"object": {
+                        u"properties": {
+                            u"o": swagger_type,
+                        },
                     },
                 },
-            },
-        })
+            }
+        )
         Type = spec.pclass_for_definition(u"object")
         self.expectThat(Type().o, Is(None))
         self.expectThat(Type().serialize(), Equals({}))
-
 
     def test_boolean(self):
         Type = self.spec.pclass_for_definition(u"boolean")
@@ -253,11 +264,9 @@ class SwaggerTests(TestCase):
         self.expectThat(Type(v=True).serialize(), Equals({u"v": True}))
         self.expectThat(Type(v=False).serialize(), Equals({u"v": False}))
 
-
     def test_required_default_serializer(self):
         Type = self.spec.pclass_for_definition(u"required-boolean")
         self.expectThat(Type(v=True).serialize(), Equals({u"v": True}))
-
 
     def test_integer_int32_errors(self):
         Type = self.spec.pclass_for_definition(u"integer.int32")
@@ -266,7 +275,7 @@ class SwaggerTests(TestCase):
             raises_exception(PTypeError),
         )
         self.expectThat(
-            lambda: Type(i=2 ** 32),
+            lambda: Type(i=2**32),
             raises_exception(InvariantException),
         )
         self.expectThat(
@@ -274,8 +283,7 @@ class SwaggerTests(TestCase):
             raises_exception(InvariantException),
         )
 
-
-    @given(integers(min_value=0, max_value=2 ** 32 - 1))
+    @given(integers(min_value=0, max_value=2**32 - 1))
     def test_integer_int32_valid(self, expected):
         Type = self.spec.pclass_for_definition(u"integer.int32")
         self.assertThat(
@@ -287,7 +295,6 @@ class SwaggerTests(TestCase):
         # The property is not required so it defaults to None.
         self.expectThat(Type().i, Is(None))
 
-
     def test_integer_int64_errors(self):
         Type = self.spec.pclass_for_definition(u"integer.int64")
         self.expectThat(
@@ -295,7 +302,7 @@ class SwaggerTests(TestCase):
             raises_exception(PTypeError),
         )
         self.expectThat(
-            lambda: Type(i=2 ** 64),
+            lambda: Type(i=2**64),
             raises_exception(InvariantException),
         )
         self.expectThat(
@@ -303,15 +310,13 @@ class SwaggerTests(TestCase):
             raises_exception(InvariantException),
         )
 
-
-    @given(integers(min_value=0, max_value=2 ** 64 - 1))
+    @given(integers(min_value=0, max_value=2**64 - 1))
     def test_integer_int64_valid(self, expected):
         Type = self.spec.pclass_for_definition(u"integer.int64")
         self.assertThat(
             Type(i=expected).i,
             Equals(expected),
         )
-
 
     def test_string_unlabeled(self):
         Type = self.spec.pclass_for_definition(u"string.unlabeled")
@@ -320,7 +325,6 @@ class SwaggerTests(TestCase):
             raises_exception(PTypeError),
         )
         self.expectThat(Type(s=u"bar").s, Equals(u"bar"))
-
 
     def test_string_date_time(self):
         Type = self.spec.pclass_for_definition(u"string.date-time")
@@ -341,7 +345,9 @@ class SwaggerTests(TestCase):
         serialized = Type(s=now).serialize()
         self.expectThat(
             serialized,
-            Equals({u"s": now.isoformat().decode("ascii")}),
+            Equals({
+                u"s": now.isoformat().decode("ascii")
+            }),
         )
         # Thanks for making bytes and unicode compare equal, Python.
         self.expectThat(serialized[u"s"], IsInstance(unicode))
@@ -355,7 +361,6 @@ class SwaggerTests(TestCase):
             Equals({}),
         )
 
-
     def test_string_int_or_string(self):
         Type = self.spec.pclass_for_definition(u"string.int-or-string")
         self.expectThat(
@@ -366,7 +371,6 @@ class SwaggerTests(TestCase):
         self.expectThat(Type(s=u"50").s, Equals(u"50"))
         self.expectThat(Type(s=50).s, Equals(50))
         self.expectThat(Type(s=50L).s, Equals(50))
-
 
     def test_object(self):
         Type = self.spec.pclass_for_definition(u"object")
@@ -384,9 +388,10 @@ class SwaggerTests(TestCase):
         )
         self.expectThat(
             Type(o={u"foo": u"bar"}).o,
-            Equals({u"foo": u"bar"}),
+            Equals({
+                u"foo": u"bar"
+            }),
         )
-
 
     def test_property_ref_simple(self):
         Type = self.spec.pclass_for_definition(u"object-with-simple-ref")
@@ -395,7 +400,6 @@ class SwaggerTests(TestCase):
             raises_exception(PTypeError),
         )
         self.expectThat(Type(p=u"foo").p, Equals(u"foo"))
-
 
     def test_property_ref_complex(self):
         Simple = self.spec.pclass_for_definition(u"object-with-simple-ref")
@@ -417,26 +421,31 @@ class SwaggerTests(TestCase):
         # Serialization is recursive.
         self.expectThat(
             Complex(p=Simple(p=u"foo")).serialize(),
-            Equals({u"p": {u"p": u"foo"}}),
+            Equals({
+                u"p": {
+                    u"p": u"foo"
+                }
+            }),
         )
-
 
     def test_property_object_arrays(self):
         Type = self.spec.pclass_for_definition(u"object-with-array")
         self.assertThat(
             Type(o={u"foo": [u"bar"]}).o,
-            Equals({u"foo": [u"bar"]}),
+            Equals({
+                u"foo": [u"bar"]
+            }),
         )
-
 
     def test_constant_property_replacement(self):
         """
         A property an object can be replaced by a constant value using thge
         ``constant_fields`` parameter.
         """
-        Type = self.spec.pclass_for_definition(u"object-with-array", constant_fields={u"o": u"foo"})
+        Type = self.spec.pclass_for_definition(
+            u"object-with-array", constant_fields={u"o": u"foo"}
+        )
         self.assertThat(Type().o, Equals(u"foo"))
-
 
 
 class Kubernetes15SwaggerTests(TestCase):
@@ -451,7 +460,6 @@ class Kubernetes15SwaggerTests(TestCase):
         The specification can be loaded from a file.
         """
         Swagger.from_path(self.spec_path)
-
 
     def test_everything(self):
         """
@@ -468,7 +476,6 @@ class Kubernetes15SwaggerTests(TestCase):
             except NotClassLike:
                 # Some stuff, indeed, is not ...
                 pass
-
 
     def test_properties_required_definition(self):
         """
@@ -491,8 +498,8 @@ class Kubernetes15SwaggerTests(TestCase):
             raises_exception(
                 InvariantException,
                 invariant_errors=(),
-                missing_fields=("runtime.RawExtension.Raw",),
-                args=("Field invariant failed",),
+                missing_fields=("runtime.RawExtension.Raw", ),
+                args=("Field invariant failed", ),
             ),
         )
 
@@ -523,7 +530,6 @@ class Kubernetes15SwaggerTests(TestCase):
         )
         self.expectThat(RawExtension(Raw=b"foo").Raw, Equals(b"foo"))
 
-
     def test_array_property(self):
         """
         For a definition with a property of type *array*,
@@ -540,11 +546,10 @@ class Kubernetes15SwaggerTests(TestCase):
             lambda: Capabilities(add=b"hello"),
             raises_exception(
                 CheckedValueTypeError,
-                expected_types=(unicode,),
+                expected_types=(unicode, ),
                 actual_type=bytes,
             ),
         )
-
 
     def test_reference_property(self):
         """
@@ -558,16 +563,15 @@ class Kubernetes15SwaggerTests(TestCase):
         # the spec.  It also demonstrates that "required" itself is optional.
         name = u"v1.APIGroup"
         APIGroup = spec.pclass_for_definition(name)
-        GroupVersionForDiscovery = spec.pclass_for_definition(u"v1.GroupVersionForDiscovery")
+        GroupVersionForDiscovery = spec.pclass_for_definition(
+            u"v1.GroupVersionForDiscovery"
+        )
         self.assertThat(
             lambda: APIGroup(
                 name=u"group",
-                versions=[spec],
-            ),
+                versions=[spec], ),
             raises_exception(
-                TypeError,
-            ),
-        )
+                TypeError, ), )
 
         group_version = GroupVersionForDiscovery(
             groupVersion=u"group/version",
@@ -580,36 +584,37 @@ class Kubernetes15SwaggerTests(TestCase):
         )
 
 
-
 def is_subclass(cls):
     return MatchesPredicate(
         lambda value: issubclass(value, cls),
-        "%%s is not a subclass of %s" % (cls,),
+        "%%s is not a subclass of %s" % (cls, ),
     )
 
 
 def raises_exception(cls, **attributes):
     def get_exception((type, exception, traceback)):
         return exception
+
     return Raises(
         AfterPreprocessing(
             get_exception,
             MatchesAll(
                 IsInstance(cls),
-                MatchesStructure(**{
-                    k: Equals(v) for (k, v) in attributes.items()
-                }),
+                MatchesStructure(
+                    **{k: Equals(v)
+                       for (k, v) in attributes.items()}
+                ),
                 first_only=True,
             ),
         ),
     )
 
 
-
 class PClassesTests(TestCase):
     """
     Tests for ``PClasses``.
     """
+
     def test_useprefix(self):
         """
         ``PClasses`` can be used with ``UsePrefix`` to get access to the
@@ -620,48 +625,53 @@ class PClassesTests(TestCase):
             u"type": u"object",
             u"properties": {},
         })
-        spec = Swagger.from_document({
-            u"definitions": {
-                u"a.X": template,
-                u"b.X": template,
-            },
-        })
+        spec = Swagger.from_document(
+            {
+                u"definitions": {
+                    u"a.X": template,
+                    u"b.X": template,
+                },
+            }
+        )
         pclasses = PClasses(
             specification=spec,
             name_translator=UsePrefix(prefix=u"a."),
         )
         self.assertThat(
-            pclasses[u"X"], Is(spec.pclass_for_definition(u"a.X")),
+            pclasses[u"X"],
+            Is(spec.pclass_for_definition(u"a.X")),
         )
-
 
     def test_no_definition(self):
         """
         If there is no definition matching the requested name,
         ``PClasses.__getitem__`` raises ``KeyError``.
         """
-        pclasses = PClasses(specification=Swagger.from_document({
-            u"definitions": {},
-        }))
+        pclasses = PClasses(
+            specification=Swagger.from_document({
+                u"definitions": {},
+            })
+        )
         self.assertThat(
             lambda: pclasses[u"Foo"],
             raises(KeyError(u"Foo")),
         )
-
 
     def test_default_translator(self):
         """
         If no name translator is provided, ``PClasses`` looks up a definition
         exactly matching the name passed to ``PClasses.__getitem__``.
         """
-        spec = Swagger.from_document({
-            u"definitions": {
-                u"foo": {
-                    u"type": u"object",
-                    u"properties": {},
+        spec = Swagger.from_document(
+            {
+                u"definitions": {
+                    u"foo": {
+                        u"type": u"object",
+                        u"properties": {},
+                    },
                 },
-            },
-        })
+            }
+        )
         pclasses = PClasses(specification=spec)
         self.assertThat(
             pclasses[u"foo"],
@@ -669,22 +679,23 @@ class PClassesTests(TestCase):
         )
 
 
-
 class VersionedPClassesTests(TestCase):
     """
     Tests for ``VersionedPClasses``.
     """
+
     def setUp(self):
         super(VersionedPClassesTests, self).setUp()
-        self.spec = Swagger.from_document({
-            u"definitions": {
-                u"a.foo": {
-                    u"type": u"object",
-                    u"properties": {},
+        self.spec = Swagger.from_document(
+            {
+                u"definitions": {
+                    u"a.foo": {
+                        u"type": u"object",
+                        u"properties": {},
+                    },
                 },
-            },
-        })
-
+            }
+        )
 
     def test_attribute_access(self):
         """
@@ -698,7 +709,6 @@ class VersionedPClassesTests(TestCase):
             Is(self.spec.pclass_for_definition(u"a.foo")),
         )
 
-
     def test_name(self):
         """
         The classes retrieved via ``VersionedPClasses`` attribute access have
@@ -711,7 +721,6 @@ class VersionedPClassesTests(TestCase):
             MatchesAll(IsInstance(unicode), Equals(u"foo")),
         )
 
-
     def test_version(self):
         """
         The classes retrieved via ``VersionedPClasses`` attribute access have
@@ -720,7 +729,6 @@ class VersionedPClassesTests(TestCase):
         """
         a = VersionedPClasses(self.spec, u"a", version_field=u"version")
         self.assertThat(a.foo().version, Equals(u"a"))
-
 
     def test_missing(self):
         """

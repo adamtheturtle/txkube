@@ -1,6 +1,5 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 An interface to Swagger specifications.
 
@@ -11,21 +10,25 @@ best they can.  They also support being serialized down to raw (JSON-y)
 objects and loaded from such objects.
 """
 
-from json import load
 from datetime import datetime
 from itertools import chain
+from json import load
 
 from dateutil.parser import parse as parse_iso8601
-
-from zope.interface import Attribute, Interface, implementer
-
 from pyrsistent import (
-    CheckedValueTypeError, PClass, PVector, pvector, field, pvector_field,
-    pmap_field, freeze, pmap,
+    CheckedValueTypeError,
+    PClass,
+    PVector,
+    field,
+    freeze,
+    pmap,
+    pmap_field,
+    pvector,
+    pvector_field,
 )
-
 from twisted.python.compat import nativeString
 from twisted.python.reflect import fullyQualifiedName
+from zope.interface import Attribute, Interface, implementer
 
 
 class NotClassLike(Exception):
@@ -34,7 +37,6 @@ class NotClassLike(Exception):
     compatible with Python classes but it is not (for example, it is a simple
     type like *string* or *integer*).
     """
-
 
 
 class Swagger(PClass):
@@ -70,7 +72,6 @@ class Swagger(PClass):
         with spec_path.open() as spec_file:
             return cls.from_document(load(spec_file))
 
-
     @classmethod
     def from_document(cls, document):
         """
@@ -80,7 +81,6 @@ class Swagger(PClass):
             parsing a Swagger JSON specification string.
         """
         return cls(_pclasses={}, **document)
-
 
     def pclass_for_definition(self, name, constant_fields=pmap()):
         """
@@ -99,12 +99,11 @@ class Swagger(PClass):
             kind = self._identify_kind(definition)
             if kind is None:
                 raise NotClassLike(name, definition)
-            generator =  getattr(self, "_model_for_{}".format(kind))
+            generator = getattr(self, "_model_for_{}".format(kind))
             model = generator(name, definition, constant_fields)
             cls = model.pclass()
             self._pclasses[name] = cls
         return cls
-
 
     def _identify_kind(self, definition):
         """
@@ -125,7 +124,6 @@ class Swagger(PClass):
             return "CLASS"
         return None
 
-
     def _model_for_CLASS(self, name, definition, constant_fields):
         """
         Model a Swagger definition that is like a Python class.
@@ -142,16 +140,18 @@ class Swagger(PClass):
             Swagger definition if they collide.
         """
         return _ClassModel.from_swagger(
-            self.pclass_for_definition, name, definition,
+            self.pclass_for_definition,
+            name,
+            definition,
             constant_fields,
         )
-
 
 
 class IRangeModel(Interface):
     """
     An ``IRangeModel`` provider models the range of values a type can take on.
     """
+
     def pyrsistent_invariant():
         """
         :return: A pyrsistent invariant which enforces the range.  It accepts one
@@ -170,7 +170,9 @@ class ITypeModel(Interface):
     found in an array or mapping.
     """
     python_types = Attribute("tuple of python types compatible with this type")
-    factory = Attribute("An optional callable for converting values to this type.")
+    factory = Attribute(
+        "An optional callable for converting values to this type."
+    )
 
     def pclass_field_for_type(required):
         """
@@ -182,7 +184,6 @@ class ITypeModel(Interface):
         :return: A pyrsistent field descriptor for an attribute which is
             usable with values of this type.
         """
-
 
 
 @implementer(ITypeModel)
@@ -209,7 +210,9 @@ class _BasicTypeModel(PClass):
     python_types = field(mandatory=True)
     range = field(mandatory=True, initial=None)
     factory = field(mandatory=True, initial=None)
-    serializer = field(mandatory=True, initial=lambda: lambda format, value: value)
+    serializer = field(
+        mandatory=True, initial=lambda: lambda format, value: value
+    )
 
     def _pyrsistent_invariant(self, required):
         """
@@ -226,12 +229,13 @@ class _BasicTypeModel(PClass):
         invariant = self.range.pyrsistent_invariant()
         if required:
             return invariant
+
         def optional(v):
             if v is None:
                 return (True, u"")
             return invariant(v)
-        return optional
 
+        return optional
 
     def _pyrsistent_factory(self, required):
         """
@@ -247,14 +251,15 @@ class _BasicTypeModel(PClass):
             return None
         if required:
             return self.factory
+
         def optional(v):
             if v is None:
                 return None
             if isinstance(v, self.python_types):
                 return v
             return self.factory(v)
-        return optional
 
+        return optional
 
     def _pyrsistent_serializer(self, required):
         """
@@ -273,8 +278,8 @@ class _BasicTypeModel(PClass):
             if value is None:
                 return omit
             return self.serializer(format, value)
-        return serialize
 
+        return serialize
 
     def pclass_field_for_type(self, required):
         """
@@ -293,7 +298,7 @@ class _BasicTypeModel(PClass):
             extra[u"invariant"] = invariant
 
         if not required:
-            python_types += (type(None),)
+            python_types += (type(None), )
             extra[u"initial"] = None
 
         factory = self._pyrsistent_factory(required)
@@ -302,10 +307,7 @@ class _BasicTypeModel(PClass):
 
         extra[u"serializer"] = self._pyrsistent_serializer(required)
 
-        return field(
-            mandatory=required, type=python_types, **extra
-        )
-
+        return field(mandatory=required, type=python_types, **extra)
 
 
 def provider_invariant(interface):
@@ -321,14 +323,12 @@ def provider_invariant(interface):
     )
 
 
-
 def itypemodel_field():
     """
     :return: A pyrsistent field for an attribute which much refer to an
         ``ITypeModel`` provider.
     """
     return field(invariant=provider_invariant(ITypeModel))
-
 
 
 @implementer(ITypeModel)
@@ -353,11 +353,11 @@ class _ArrayTypeModel(PClass):
         # okay to put it back in to field again.
         return freeze(self.pclass_field_for_type(True).type)
 
-
     def pclass_field_for_type(self, required):
         # XXX ignores the range's pyrsistent_invariant
-        return pvector_field(self.element_type.python_types, optional=not required)
-
+        return pvector_field(
+            self.element_type.python_types, optional=not required
+        )
 
 
 # TODO It might make more sense to handle this the same way as a reference to
@@ -385,7 +385,6 @@ class _MappingTypeModel(PClass):
             value_type=self.value_type.python_types,
             optional=not required,
         )
-
 
 
 class _AttributeModel(PClass):
@@ -419,7 +418,6 @@ class _AttributeModel(PClass):
         return self.type_model.pclass_field_for_type(required=self.required)
 
 
-
 class _ConstantModel(PClass):
     """
     A ``_ConstantModel`` models a constant valued attribute.
@@ -444,7 +442,6 @@ class _ConstantModel(PClass):
         return self.value
 
 
-
 @implementer(IRangeModel)
 class _IntegerRange(PClass):
     """
@@ -457,14 +454,13 @@ class _IntegerRange(PClass):
     min = field(type=(int, long))
     max = field(type=(int, long))
 
-
     @classmethod
     def from_unsigned_bits(cls, n):
         """
         Create a range corresponding to that of an unsigned integer of ``n``
         bits.
         """
-        return cls(min=0, max=2 ** n - 1)
+        return cls(min=0, max=2**n - 1)
 
     @classmethod
     def from_signed_bits(cls, n):
@@ -473,8 +469,7 @@ class _IntegerRange(PClass):
         of ``n`` bits.
         """
         m = n - 1
-        return cls(min=-2 ** m, max=2 ** m - 1)
-
+        return cls(min=-2**m, max=2**m - 1)
 
     def pyrsistent_invariant(self):
         """
@@ -484,7 +479,6 @@ class _IntegerRange(PClass):
             self.min <= v <= self.max,
             "{!r} out of required range ({}, {})".format(v, self.min, self.max),
         )
-
 
 
 def _parse_iso8601(text):
@@ -502,16 +496,17 @@ def _parse_iso8601(text):
             return parse_iso8601(text)
         except ValueError:
             raise CheckedValueTypeError(
-                None, (datetime,), unicode, text,
+                None,
+                (datetime, ),
+                unicode,
+                text,
             )
     # Let pyrsistent reject it down the line.
     return text
 
 
-
 def _isoformat(format, v):
     return v.isoformat().decode("ascii")
-
 
 
 class _ClassModel(PClass):
@@ -530,24 +525,33 @@ class _ClassModel(PClass):
     :ivar PVector attributes: Models for the fields of the definition.
     """
     _basic_types = {
-        (u"boolean", None): _BasicTypeModel(python_types=(bool,)),
-        (u"integer", u"int32"): _BasicTypeModel(
+        (u"boolean", None):
+        _BasicTypeModel(python_types=(bool, )),
+        (u"integer", u"int32"):
+        _BasicTypeModel(
             # XXX Kubernetes uses this to mean unsigned 32 bit integer.
             # Swagger spec says it is for signed 32 bit integer.  Since we're
             # trying to *use* Kubernetes ...
-            python_types=(int, long), range=_IntegerRange.from_unsigned_bits(32),
+            python_types=(int, long),
+            range=_IntegerRange.from_unsigned_bits(32),
         ),
-        (u"integer", u"int64"): _BasicTypeModel(
-            python_types=(int, long), range=_IntegerRange.from_unsigned_bits(64),
+        (u"integer", u"int64"):
+        _BasicTypeModel(
+            python_types=(int, long),
+            range=_IntegerRange.from_unsigned_bits(64),
         ),
-        (u"string", None): _BasicTypeModel(python_types=(unicode,)),
-        (u"string", u"byte"): _BasicTypeModel(python_types=(bytes,)),
-        (u"string", u"date-time"): _BasicTypeModel(
-            python_types=(datetime,),
+        (u"string", None):
+        _BasicTypeModel(python_types=(unicode, )),
+        (u"string", u"byte"):
+        _BasicTypeModel(python_types=(bytes, )),
+        (u"string", u"date-time"):
+        _BasicTypeModel(
+            python_types=(datetime, ),
             factory=_parse_iso8601,
             serializer=_isoformat,
         ),
-        (u"string", u"int-or-string"): _BasicTypeModel(
+        (u"string", u"int-or-string"):
+        _BasicTypeModel(
             python_types=(unicode, int, long),
         ),
     }
@@ -563,7 +567,8 @@ class _ClassModel(PClass):
             # Get a model for whatever the nested thing is and put it into an
             # array model.
             element_type = cls._type_model_for_spec(
-                pclass_for_definition, spec[u"items"],
+                pclass_for_definition,
+                spec[u"items"],
             )
             return _ArrayTypeModel(element_type=element_type)
 
@@ -572,7 +577,8 @@ class _ClassModel(PClass):
             # some other thing.  Get a model for whatever the values are
             # supposed to be and put that into a mapping model.
             value_type = cls._type_model_for_spec(
-                pclass_for_definition, spec[u"additionalProperties"],
+                pclass_for_definition,
+                spec[u"additionalProperties"],
             )
             return _MappingTypeModel(value_type=value_type)
 
@@ -595,13 +601,14 @@ class _ClassModel(PClass):
                 # Probably some refactoring is in order.
                 _, spec = e.args
                 return cls._type_model_for_spec(
-                    pclass_for_definition, spec,
+                    pclass_for_definition,
+                    spec,
                 )
             else:
                 # For our purposes, the pclass we got is just another basic
                 # type we can model.
                 return _BasicTypeModel(
-                    python_types=(python_type,),
+                    python_types=(python_type, ),
                     factory=python_type.create,
                     serializer=lambda format, value: value.serialize(format),
                 )
@@ -610,26 +617,32 @@ class _ClassModel(PClass):
         # type.  Look up the corresponding model object in the static mapping.
         return cls._basic_types[spec[u"type"], spec.get(u"format", None)]
 
-
     @classmethod
     def _attribute_for_property(
         cls, pclass_for_definition, name, required, definition
     ):
-        type_model = cls._type_model_for_spec(pclass_for_definition, definition)
-        return _AttributeModel(name=name, required=required, type_model=type_model)
-
+        type_model = cls._type_model_for_spec(
+            pclass_for_definition, definition
+        )
+        return _AttributeModel(
+            name=name, required=required, type_model=type_model
+        )
 
     @classmethod
     def _attributes_for_definition(cls, pclass_for_definition, definition):
         required = definition.get(u"required", [])
         for prop, spec in definition[u"properties"].items():
             yield cls._attribute_for_property(
-                pclass_for_definition, prop, prop in required, spec,
+                pclass_for_definition,
+                prop,
+                prop in required,
+                spec,
             )
 
-
     @classmethod
-    def from_swagger(cls, pclass_for_definition, name, definition, constant_fields):
+    def from_swagger(
+        cls, pclass_for_definition, name, definition, constant_fields
+    ):
         """
         Create a new ``_ClassModel`` from a single Swagger definition.
 
@@ -649,18 +662,20 @@ class _ClassModel(PClass):
         return cls(
             name=name,
             doc=definition.get(u"description", name),
-            attributes=chain((
-                attr
-                for attr
-                in cls._attributes_for_definition(pclass_for_definition, definition)
-                if constant_fields is None or attr.name not in constant_fields
-            ), (
-                _ConstantModel(name=name, value=value)
-                for (name, value)
-                in constant_fields.items()
-            )),
+            attributes=chain(
+                (
+                    attr
+                    for attr in cls._attributes_for_definition(
+                        pclass_for_definition, definition
+                    )
+                    if constant_fields is None or
+                    attr.name not in constant_fields
+                ), (
+                    _ConstantModel(name=name, value=value)
+                    for (name, value) in constant_fields.items()
+                )
+            ),
         )
-
 
     def pclass(self):
         """
@@ -668,23 +683,22 @@ class _ClassModel(PClass):
         """
         content = {
             attr.name: attr.pclass_field_for_attribute()
-            for attr
-            in self.attributes
+            for attr in self.attributes
         }
         content["__doc__"] = nativeString(self.doc)
         content["serialize"] = _serialize_with_omit
-        return type(nativeString(self.name), (PClass,), content)
+        return type(nativeString(self.name), (PClass, ), content)
 
 
 omit = object()
+
+
 def _serialize_with_omit(self, format=None):
     return {
         key: value
-        for (key, value)
-        in PClass.serialize(self, format).iteritems()
+        for (key, value) in PClass.serialize(self, format).iteritems()
         if value is not omit
     }
-
 
 
 class INameTranslator(Interface):
@@ -692,6 +706,7 @@ class INameTranslator(Interface):
     An ``INameTranslator`` translates from a name convenient for use in Python
     to a name used in a Swagger definition.
     """
+
     def translate(name):
         """
         Translate the name from Python to Swagger.
@@ -701,16 +716,15 @@ class INameTranslator(Interface):
         """
 
 
-
 @implementer(INameTranslator)
 class IdentityTranslator(object):
     """
     ``IdentityTranslator`` provides the identity translation.  In other words,
     it is a no-op.
     """
+
     def translate(self, name):
         return name
-
 
 
 @implementer(INameTranslator)
@@ -726,7 +740,6 @@ class UsePrefix(PClass):
 
     def translate(self, name):
         return self.prefix + name
-
 
 
 class PClasses(PClass):
@@ -746,7 +759,8 @@ class PClasses(PClass):
     """
     specification = field(mandatory=True, type=Swagger)
     name_translator = field(
-        mandatory=True, initial=IdentityTranslator(),
+        mandatory=True,
+        initial=IdentityTranslator(),
         invariant=provider_invariant(INameTranslator),
     )
 
@@ -760,7 +774,6 @@ class PClasses(PClass):
         """
         name = self.name_translator.translate(name)
         return self.specification.pclass_for_definition(name)
-
 
 
 class VersionedPClasses(object):
@@ -777,12 +790,12 @@ class VersionedPClasses(object):
        )
        deployment = v1beta1.Deployment(...)
     """
+
     def __init__(self, spec, version, name_field=None, version_field=None):
         self.spec = spec
         self.version = version
         self.name_field = name_field
         self.version_field = version_field
-
 
     def __getattr__(self, name):
         name = name.decode("ascii")
@@ -794,7 +807,8 @@ class VersionedPClasses(object):
         definition_name = self.version + u"." + name
         try:
             return self.spec.pclass_for_definition(
-                definition_name, constant_fields=constant_fields,
+                definition_name,
+                constant_fields=constant_fields,
             )
         except KeyError:
             raise AttributeError(name)

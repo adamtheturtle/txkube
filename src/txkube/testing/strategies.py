@@ -1,6 +1,5 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Hypothesis strategies useful for testing ``pykube``.
 """
@@ -8,8 +7,17 @@ Hypothesis strategies useful for testing ``pykube``.
 from string import ascii_lowercase, digits
 
 from hypothesis.strategies import (
-    none, builds, fixed_dictionaries, lists, sampled_from, one_of, text,
-    dictionaries, tuples, integers, booleans,
+    booleans,
+    builds,
+    dictionaries,
+    fixed_dictionaries,
+    integers,
+    lists,
+    none,
+    one_of,
+    sampled_from,
+    text,
+    tuples,
 )
 
 from .. import v1, v1beta1
@@ -24,6 +32,7 @@ from .. import v1, v1beta1
 # enough.
 _QUICK_AVERAGE_SIZE = 3
 _QUICK_MAX_SIZE = 10
+
 
 def joins(sep, elements):
     """
@@ -40,6 +49,8 @@ def joins(sep, elements):
         lambda values: sep.join(values),
         elements,
     )
+
+
 join = joins
 
 
@@ -52,23 +63,21 @@ def dns_labels():
     letter_digit_hyphen = letter_digit + u"-"
     variations = [
         # Could be just one character long
-        (sampled_from(letter),),
+        (sampled_from(letter), ),
         # Or longer
-        (sampled_from(letter),
-         text(
-             letter_digit_hyphen,
-             min_size=0,
-             max_size=61,
-             average_size=_QUICK_AVERAGE_SIZE,
-         ),
-         sampled_from(letter_digit),
+        (
+            sampled_from(letter), text(
+                letter_digit_hyphen,
+                min_size=0,
+                max_size=61,
+                average_size=_QUICK_AVERAGE_SIZE,
+            ), sampled_from(letter_digit),
         ),
     ]
-    return one_of(list(
-        joins(u"", tuples(*alphabet))
-        for alphabet
-        in variations
-    ))
+    return one_of(
+        list(joins(u"", tuples(*alphabet)) for alphabet in variations)
+    )
+
 
 # XXX wrong
 object_name = object_names = dns_labels
@@ -129,14 +138,16 @@ def object_metadatas():
     """
     return builds(
         v1.ObjectMeta.create,
-        fixed_dictionaries({
-            u"name": object_name(),
-            u"uid": none(),
-            u"labels": one_of(
-                none(),
-                labels(),
-            ),
-        }),
+        fixed_dictionaries(
+            {
+                u"name": object_name(),
+                u"uid": none(),
+                u"labels": one_of(
+                    none(),
+                    labels(),
+                ),
+            }
+        ),
     )
 
 
@@ -146,11 +157,10 @@ def namespaced_object_metadatas():
     """
     return builds(
         lambda obj_metadata, namespace: obj_metadata.set(
-            u"namespace", namespace,
-        ),
+            u"namespace",
+            namespace, ),
         obj_metadata=object_metadatas(),
-        namespace=object_name(),
-    )
+        namespace=object_name(), )
 
 
 def namespace_statuses():
@@ -194,11 +204,11 @@ def configmap_data_keys():
     """
     return builds(
         lambda labels, dot: dot + u".".join(labels),
-        labels=lists(object_name(), average_size=2, min_size=1, max_size=253//2),
+        labels=lists(
+            object_name(), average_size=2, min_size=1, max_size=253 // 2
+        ),
         dot=sampled_from([u"", u"."]),
-    ).filter(
-        lambda key: len(key) <= 253
-    )
+    ).filter(lambda key: len(key) <= 253)
 
 
 def configmap_data_values():
@@ -258,7 +268,7 @@ def podspecs():
             # documentation says it must be a positive integer.  The Golang
             # PodSpec struct (pkg/api/v1/types.go:PodSpec) declares it a field
             # of type ``*int64`` - a signed type.
-            integers(min_value=0, max_value=2 ** 63 - 1),
+            integers(min_value=0, max_value=2**63 - 1),
         ),
         dnsPolicy=sampled_from([u"ClusterFirst", u"Default"]),
         hostIPC=booleans(),
@@ -290,7 +300,6 @@ def podtemplatespecs():
     )
 
 
-
 def replicasetspecs():
     """
     Build ``v1beta1.ReplicaSetSpec"".
@@ -301,15 +310,13 @@ def replicasetspecs():
             # spec.
             selector={u"matchLabels": template.metadata.labels},
             template=template,
-            **kw
-        ),
+            **kw),
         template=podtemplatespecs(),
-        minReadySeconds=integers(min_value=0, max_value=2 ** 31 - 1),
+        minReadySeconds=integers(min_value=0, max_value=2**31 - 1),
         # Strictly speaking, the max value is more like 2 ** 31 -1.  However,
         # if we actually sent such a thing to Kubernetes we could probably
         # expect only undesirable consequences.
-        replicas=integers(min_value=0, max_value=3),
-    )
+        replicas=integers(min_value=0, max_value=3), )
 
 
 def replicasets():
@@ -332,10 +339,8 @@ def deploymentspecs():
             template=template,
             # The selector has to match the PodTemplateSpec.  This is an easy
             # way to accomplish that but not the only way.
-            selector={u"matchLabels": template.metadata.labels},
-        ),
-        template=podtemplatespecs(),
-    )
+            selector={u"matchLabels": template.metadata.labels}, ),
+        template=podtemplatespecs(), )
 
 
 def deployments():
@@ -348,13 +353,11 @@ def deployments():
             # Deployment.spec.template.metadata.labels but the server will
             # copy them up if they're missing at the top.
             metadata=metadata.set("labels", spec.template.metadata.labels),
-            spec=spec,
-        ),
+            spec=spec, ),
         metadata=namespaced_object_metadatas(),
         # XXX Spec is only required if you want to be able to create the
         # Deployment.
-        spec=deploymentspecs(),
-    )
+        spec=deploymentspecs(), )
 
 
 def podstatuses():
@@ -416,7 +419,6 @@ def services():
     )
 
 
-
 def _collections(cls, strategy, unique_by):
     """
     A helper for defining a strategy to build ``...List`` objects.
@@ -443,7 +445,9 @@ def deploymentlists():
     """
     Build ``v1beta1.DeploymentList``.
     """
-    return _collections(v1beta1.DeploymentList, deployments(), _unique_names_with_namespaces)
+    return _collections(
+        v1beta1.DeploymentList, deployments(), _unique_names_with_namespaces
+    )
 
 
 def podlists():
@@ -457,14 +461,18 @@ def replicasetlists():
     """
     Build ``v1beta1.ReplicaSetList``.
     """
-    return _collections(v1beta1.ReplicaSetList, replicasets(), _unique_names_with_namespaces)
+    return _collections(
+        v1beta1.ReplicaSetList, replicasets(), _unique_names_with_namespaces
+    )
 
 
 def configmaplists():
     """
     Build ``v1.ConfigMapList``.
     """
-    return _collections(v1.ConfigMapList, configmaps(), _unique_names_with_namespaces)
+    return _collections(
+        v1.ConfigMapList, configmaps(), _unique_names_with_namespaces
+    )
 
 
 def namespacelists(namespaces=creatable_namespaces()):
@@ -478,7 +486,9 @@ def servicelists():
     """
     Build ``v1.ServiceList``.
     """
-    return _collections(v1.ServiceList, services(), _unique_names_with_namespaces)
+    return _collections(
+        v1.ServiceList, services(), _unique_names_with_namespaces
+    )
 
 
 def objectcollections(namespaces=creatable_namespaces()):

@@ -1,12 +1,10 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 xUnit TestCase for txkube testing.
 """
 
 from fixtures import CompoundFixture
-
 from testtools import TestCase as TesttoolsTestCase
 from testtools.twistedsupport import AsynchronousDeferredRunTest
 
@@ -17,6 +15,7 @@ class AsynchronousDeferredRunTest(AsynchronousDeferredRunTest):
     """
     An asynchronous runner supporting Eliot.
     """
+
     def _get_log_fixture(self):
         """
         Add ``CaptureEliotLogs`` to the log fixtures which receive special
@@ -27,11 +26,12 @@ class AsynchronousDeferredRunTest(AsynchronousDeferredRunTest):
 
         See <https://bugs.launchpad.net/testtools/+bug/897196>.
         """
-        return CompoundFixture([
-            super(AsynchronousDeferredRunTest, self)._get_log_fixture(),
-            CaptureEliotLogs(),
-        ])
-
+        return CompoundFixture(
+            [
+                super(AsynchronousDeferredRunTest, self)._get_log_fixture(),
+                CaptureEliotLogs(),
+            ]
+        )
 
 
 class TestCase(TesttoolsTestCase):
@@ -39,6 +39,7 @@ class TestCase(TesttoolsTestCase):
     A base class for test cases which automatically uses the
     ``CaptureEliotLogs`` fixture.
     """
+
     # expectThat and Hypothesis don't communicate well about when the
     # test has failed.  Give them a little help.  These two Hypothesis
     # hooks will check for a flag that testtools sets when it thinks

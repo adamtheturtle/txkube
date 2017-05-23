@@ -1,6 +1,5 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Functional structures for representing different kinds of Kubernetes
 state.
@@ -8,21 +7,25 @@ state.
 
 from uuid import uuid4
 
+from pyrsistent import mutant
+from twisted.python.filepath import FilePath
 from zope.interface import implementer
 
-from pyrsistent import mutant
-
-from twisted.python.filepath import FilePath
-
-from . import UnrecognizedVersion, UnrecognizedKind, IObject
+from . import IObject, UnrecognizedKind, UnrecognizedVersion
 from ._swagger import Swagger, VersionedPClasses
 
 spec = Swagger.from_path(FilePath(__file__).sibling(u"kubernetes-1.5.json"))
 v1 = VersionedPClasses(
-    spec, u"v1", name_field=u"kind", version_field=u"apiVersion",
+    spec,
+    u"v1",
+    name_field=u"kind",
+    version_field=u"apiVersion",
 )
 v1beta1 = VersionedPClasses(
-    spec, u"v1beta1", name_field=u"kind", version_field=u"apiVersion",
+    spec,
+    u"v1beta1",
+    name_field=u"kind",
+    version_field=u"apiVersion",
 )
 
 
@@ -31,11 +34,12 @@ def behavior(namespace):
     Create a class decorator which adds the resulting class to the given
     namespace-y thing.
     """
+
     def decorator(cls):
         setattr(namespace, cls.__name__, cls)
         return cls
-    return decorator
 
+    return decorator
 
 
 @behavior(v1)
@@ -44,15 +48,14 @@ class NamespaceStatus(v1.NamespaceStatus):
     ``NamespaceStatus`` instances model `Kubernetes namespace status
     <https://kubernetes.io/docs/api-reference/v1/definitions/#_v1_namespacestatus>`_.
     """
+
     @classmethod
     def active(cls):
         return cls(phase=u"Active")
 
-
     @classmethod
     def terminating(cls):
         return cls(phase=u"Terminating")
-
 
 
 @behavior(v1)
@@ -62,6 +65,7 @@ class Namespace(v1.Namespace):
     ``Namespace`` instances model `Kubernetes namespaces
     <https://kubernetes.io/docs/user-guide/namespaces/>`_.
     """
+
     @classmethod
     def default(cls):
         """
@@ -69,21 +73,20 @@ class Namespace(v1.Namespace):
         """
         return cls(metadata=v1.ObjectMeta(name=u"default"))
 
-
     def fill_defaults(self):
         return self.transform(
             # TODO Also creationTimestamp, resourceVersion, maybe selfLink.
             # Also, should this clobber existing values or leave them alone?
             # See https://github.com/LeastAuthority/txkube/issues/36
-            [u"metadata", u"uid"], unicode(uuid4()),
-            [u"status"], NamespaceStatus.active(),
+            [u"metadata", u"uid"],
+            unicode(uuid4()),
+            [u"status"],
+            NamespaceStatus.active(),
         )
-
 
     def delete_from(self, collection):
         # TODO: deletionTimestamp?  Terminating status?  See #24
         return collection.remove(self)
-
 
 
 @behavior(v1)
@@ -93,15 +96,14 @@ class ConfigMap(v1.ConfigMap):
     ``ConfigMap`` instances model `ConfigMap objects
     <https://kubernetes.io/docs/api-reference/v1/definitions/#_v1_configmap>`_.
     """
+
     def fill_defaults(self):
         # TODO Surely some stuff to fill.
         # See https://github.com/LeastAuthority/txkube/issues/36
         return self
 
-
     def delete_from(self, collection):
         return collection.remove(self)
-
 
 
 @behavior(v1)
@@ -111,15 +113,14 @@ class Service(v1.Service):
     ``Service`` instances model `Service objects
     <https://kubernetes.io/docs/api-reference/v1/definitions/#_v1_service>`_.
     """
+
     def fill_defaults(self):
         # TODO Surely some stuff to fill.
         # See https://github.com/LeastAuthority/txkube/issues/36
         return self
 
-
     def delete_from(self, collection):
         return collection.remove(self)
-
 
 
 def set_if_none(desired_value):
@@ -127,12 +128,13 @@ def set_if_none(desired_value):
     Create a transformer which sets the given value if it finds ``None`` as
     the current value, otherwise leaves the current value alone.
     """
+
     def transform(current_value):
         if current_value is None:
             return desired_value
         return current_value
-    return transform
 
+    return transform
 
 
 @behavior(v1beta1)
@@ -142,6 +144,7 @@ class Deployment(v1beta1.Deployment):
     ``Deployment`` instances model `Deployment objects
     <https://kubernetes.io/docs/api-reference/extensions/v1beta1/definitions/#_v1beta1_deployment>`_.
     """
+
     def fill_defaults(self):
         # Copying apparent Kubernetes behavior.
         return self.transform(
@@ -149,10 +152,8 @@ class Deployment(v1beta1.Deployment):
             set_if_none(self.spec.template.metadata.labels),
         )
 
-
     def delete_from(self, collection):
         return collection.remove(self)
-
 
 
 @behavior(v1beta1)
@@ -162,13 +163,12 @@ class ReplicaSet(v1beta1.ReplicaSet):
     ``ReplicaSet`` instances model `ReplicaSet objects
     <https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/>`_.
     """
+
     def fill_defaults(self):
         return self
 
-
     def delete_from(self, collection):
         return collection.remove(self)
-
 
 
 @behavior(v1)
@@ -178,13 +178,12 @@ class Pod(v1.Pod):
     ``Pod`` instances model `Pod objects
     <https://kubernetes.io/docs/api-reference/v1/definitions/#_v1_pod>`_.
     """
+
     def fill_defaults(self):
         return self
 
-
     def delete_from(self, collection):
         return collection.remove(self)
-
 
 
 def object_sort_key(obj):
@@ -198,7 +197,6 @@ def object_sort_key(obj):
         getattr(obj.metadata, "namespace", None),
         obj.metadata.name,
     )
-
 
 
 def required_unique(objects, key):
@@ -223,24 +221,23 @@ def required_unique(objects, key):
     return (True, u"")
 
 
-
 def add(value):
     def evolver(pvector):
         return sorted(pvector.append(value), key=object_sort_key)
+
     return evolver
 
 
 def remove(value):
     def evolver(pset):
         return pset.remove(value)
-    return evolver
 
+    return evolver
 
 
 class _List(object):
     def __invariant__(self):
         return required_unique(self.items, object_sort_key)
-
 
     @staticmethod
     def __new__(cls, **kwargs):
@@ -254,7 +251,6 @@ class _List(object):
         if items is None:
             kwargs[u"items"] = ()
         return super(_List, cls).__new__(cls, **kwargs)
-
 
     def item_by_name(self, name):
         """
@@ -270,21 +266,19 @@ class _List(object):
                 return obj
         raise KeyError(name)
 
-
     def add(self, obj):
         return self.transform([u"items"], add(obj))
-
 
     def remove(self, obj):
         return self.transform([u"items"], remove(obj))
 
-
     def replace(self, old, new):
         return self.transform(
-            [u"items"], remove(old),
-            [u"items"], add(new),
+            [u"items"],
+            remove(old),
+            [u"items"],
+            add(new),
         )
-
 
 
 @behavior(v1)
@@ -293,12 +287,10 @@ class NamespaceList(_List, v1.NamespaceList):
     pass
 
 
-
 @behavior(v1)
 @implementer(IObject)
 class ConfigMapList(_List, v1.ConfigMapList):
     pass
-
 
 
 @behavior(v1)
@@ -307,12 +299,10 @@ class ServiceList(_List, v1.ServiceList):
     pass
 
 
-
 @behavior(v1beta1)
 @implementer(IObject)
 class DeploymentList(_List, v1beta1.DeploymentList):
     pass
-
 
 
 @behavior(v1beta1)
@@ -321,12 +311,10 @@ class ReplicaSetList(_List, v1beta1.ReplicaSetList):
     pass
 
 
-
 @behavior(v1)
 @implementer(IObject)
 class PodList(_List, v1.PodList):
     pass
-
 
 
 _versions = {
@@ -334,11 +322,11 @@ _versions = {
     u"v1beta1": v1beta1,
 }
 
+
 def _mutilate(version):
     if version == u"v1beta1":
         return u"extensions/v1beta1"
     return version
-
 
 
 def _unmutilate(version):
@@ -347,14 +335,16 @@ def _unmutilate(version):
     return version
 
 
-
 def iobject_to_raw(obj):
     result = obj.serialize()
-    result.update({
-        u"kind": obj.kind,
-        u"apiVersion": _mutilate(obj.apiVersion),
-    })
+    result.update(
+        {
+            u"kind": obj.kind,
+            u"apiVersion": _mutilate(obj.apiVersion),
+        }
+    )
     return result
+
 
 @mutant
 def iobject_from_raw(obj):

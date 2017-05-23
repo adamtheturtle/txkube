@@ -1,6 +1,5 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 An in-memory implementation of the Kubernetes client interface.
 """
@@ -8,27 +7,23 @@ An in-memory implementation of the Kubernetes client interface.
 from json import dumps, loads
 
 import attr
-
+from eliot import start_action
+from klein import Klein
 from pyrsistent import InvariantException, PClass, field, pset
-
+from treq.testing import RequestTraversalAgent
+from twisted.python.url import URL
+from twisted.web.http import CREATED, NOT_FOUND, OK
+from werkzeug.exceptions import NotFound
 from zope.interface import Interface, implementer
 
-from twisted.python.url import URL
-
-from twisted.web.http import CREATED, NOT_FOUND, OK
-
-from eliot import start_action
-
-from klein import Klein
-
-from werkzeug.exceptions import NotFound
-
-from treq.testing import RequestTraversalAgent
-
 from . import (
-    IKubernetes, KubernetesError, network_kubernetes,
-    v1, v1beta1,
-    iobject_from_raw, iobject_to_raw,
+    IKubernetes,
+    KubernetesError,
+    iobject_from_raw,
+    iobject_to_raw,
+    network_kubernetes,
+    v1,
+    v1beta1,
 )
 
 
@@ -52,6 +47,7 @@ class _MemoryKubernetes(object):
     the state of a real Kubernetes deployment sufficiently to expose a
     subset of the external Kubernetes API.
     """
+
     def __init__(self):
         base_url = URL.fromText(u"https://kubernetes.example.invalid./")
         self._state = _KubernetesState()
@@ -60,7 +56,6 @@ class _MemoryKubernetes(object):
             base_url=base_url,
             agent=RequestTraversalAgent(self._resource),
         )
-
 
     def _state_changed(self, state):
         """
@@ -73,7 +68,6 @@ class _MemoryKubernetes(object):
         """
         self._state = state
 
-
     def client(self, *args, **kwargs):
         """
         :return IKubernetesClient: A new client which interacts with this
@@ -82,10 +76,8 @@ class _MemoryKubernetes(object):
         return self._kubernetes.client(*args, **kwargs)
 
 
-
 def _kubernetes_resource(memory_service):
     return _Kubernetes(memory_service).app.resource()
-
 
 
 def _incrementResourceVersion(version):
@@ -104,7 +96,6 @@ def _incrementResourceVersion(version):
     return u"{}".format(int(version) + 1)
 
 
-
 def _transform_object(obj, *transformation):
     """
     Apply a pyrsistent transformation to an ``IObject``.
@@ -118,11 +109,9 @@ def _transform_object(obj, *transformation):
     :return: The transformed object.
     """
     return obj.transform(
-        [u"metadata", u"resourceVersion"],
-        _incrementResourceVersion,
+        [u"metadata", u"resourceVersion"], _incrementResourceVersion,
         *transformation
     )
-
 
 
 # Help figure out what API group some types are associated with.
@@ -132,7 +121,6 @@ _groups = {
 }
 
 
-
 class IAgency(Interface):
     """
     An ``IAgency`` implementation can impress certain additional behaviors
@@ -140,6 +128,7 @@ class IAgency(Interface):
     during state changes to give the former an opportunity to influence the
     outcome of the state change.
     """
+
     def before_create(state, obj):
         """
         This is called before an object is created.
@@ -153,7 +142,6 @@ class IAgency(Interface):
             transformation of ``obj`` (for example, with default values
             populated).
         """
-
 
     def after_create(state, obj):
         """
@@ -170,7 +158,6 @@ class IAgency(Interface):
             some transformation of ``obj`` (for example, with an observed
             status attached)l.
         """
-
 
     def before_replace(state, old, new):
         """
@@ -189,23 +176,20 @@ class IAgency(Interface):
         """
 
 
-
 @implementer(IAgency)
 class NullAgency(object):
     """
     ``NullAgency`` does nothing.
     """
+
     def before_create(self, state, obj):
         return obj
-
 
     def after_create(self, state, obj):
         return obj
 
-
     def before_replace(self, state, old, new):
         pass
-
 
 
 @implementer(IAgency)
@@ -221,15 +205,18 @@ class AdHocAgency(object):
     Perhaps in the future this will be replaced by something with less of an
     ad hoc nature.
     """
+
     def before_create(self, state, obj):
         return obj.fill_defaults()
-
 
     def after_create(self, state, obj):
         if isinstance(obj, v1beta1.Deployment):
             obj = _transform_object(
                 obj,
-                [u"metadata", u"annotations", u"deployment.kubernetes.io/revision"],
+                [
+                    u"metadata", u"annotations",
+                    u"deployment.kubernetes.io/revision"
+                ],
                 u"1",
                 [u"status"],
                 {},
@@ -239,7 +226,6 @@ class AdHocAgency(object):
                 1,
             )
         return obj
-
 
     def before_replace(self, state, old, new):
         if old.metadata.resourceVersion != new.metadata.resourceVersion:
@@ -270,7 +256,6 @@ class _KubernetesState(PClass):
     deployments = field(initial=v1beta1.DeploymentList())
     replicasets = field(initial=v1beta1.ReplicaSetList())
 
-
     def create(self, collection_name, obj):
         """
         Create a new object in the named collection.
@@ -290,7 +275,6 @@ class _KubernetesState(PClass):
             lambda c: c.add(new),
         )
         return updated
-
 
     def replace(self, collection_name, old, new):
         """
@@ -314,7 +298,6 @@ class _KubernetesState(PClass):
         )
         return updated
 
-
     def delete(self, collection_name, obj):
         """
         Delete an existing object.
@@ -334,7 +317,6 @@ class _KubernetesState(PClass):
         return updated
 
 
-
 def response(request, status, obj):
     """
     Generate a response.
@@ -348,10 +330,10 @@ def response(request, status, obj):
     """
     request.setResponseCode(status)
     request.responseHeaders.setRawHeaders(
-        u"content-type", [u"application/json"],
+        u"content-type",
+        [u"application/json"],
     )
     return dumps(obj)
-
 
 
 @attr.s(frozen=True)
@@ -377,7 +359,10 @@ class _Kubernetes(object):
         # verbose .set() operation.
         return collection.set(
             u"items",
-            pset(obj for obj in collection.items if obj.metadata.namespace == namespace),
+            pset(
+                obj for obj in collection.items
+                if obj.metadata.namespace == namespace
+            ),
         )
 
     def _collection_by_name(self, collection_name):
@@ -397,11 +382,13 @@ class _Kubernetes(object):
         try:
             obj = collection.item_by_name(name)
         except KeyError:
-            raise KubernetesError.not_found({
-                u"name": name,
-                u"kind": collection_name,
-                u"group": _groups.get(type(collection), None),
-            })
+            raise KubernetesError.not_found(
+                {
+                    u"name": name,
+                    u"kind": collection_name,
+                    u"group": _groups.get(type(collection), None),
+                }
+            )
         return response(request, OK, iobject_to_raw(obj))
 
     def _create(self, request, collection_name):
@@ -441,28 +428,33 @@ class _Kubernetes(object):
         try:
             obj = collection.item_by_name(name)
         except KeyError:
-            raise KubernetesError.not_found({
-                u"group": _groups.get(type(collection), None),
-                u"kind": collection_name,
-                u"name": name,
-            })
+            raise KubernetesError.not_found(
+                {
+                    u"group": _groups.get(type(collection), None),
+                    u"kind": collection_name,
+                    u"name": name,
+                }
+            )
         self._set_state(self._get_state().delete(collection_name, obj))
         return response(request, OK, iobject_to_raw(obj))
 
     app = Klein()
+
     @app.handle_errors(NotFound)
     def not_found(self, request, name):
         return response(
             request,
             NOT_FOUND,
-            iobject_to_raw(v1.Status(
-                status=u"Failure",
-                message=u"the server could not find the requested resource",
-                reason=u"NotFound",
-                details={},
-                metadata={},
-                code=NOT_FOUND,
-            )),
+            iobject_to_raw(
+                v1.Status(
+                    status=u"Failure",
+                    message=u"the server could not find the requested resource",
+                    reason=u"NotFound",
+                    details={},
+                    metadata={},
+                    code=NOT_FOUND,
+                )
+            ),
         )
 
     @app.handle_errors(KubernetesError)
@@ -471,6 +463,7 @@ class _Kubernetes(object):
         return response(request, exc.code, iobject_to_raw(exc.status))
 
     with app.subroute(u"/api/v1") as app:
+
         @app.route(u"/namespaces", methods=[u"GET"])
         def list_namespaces(self, request):
             """
@@ -491,7 +484,10 @@ class _Kubernetes(object):
             Delete one Namespace by name.
             """
             return self._delete(
-                request, u"namespaces", None, namespace,
+                request,
+                u"namespaces",
+                None,
+                namespace,
             )
 
         @app.route(u"/namespaces", methods=[u"POST"])
@@ -555,7 +551,10 @@ class _Kubernetes(object):
             """
             return self._list(request, None, u"configmaps")
 
-        @app.route(u"/namespaces/<namespace>/configmaps/<configmap>", methods=[u"GET"])
+        @app.route(
+            u"/namespaces/<namespace>/configmaps/<configmap>",
+            methods=[u"GET"]
+        )
         def get_configmap(self, request, namespace, configmap):
             """
             Get one ConfigMap by name.
@@ -569,7 +568,10 @@ class _Kubernetes(object):
             """
             return self._create(request, u"configmaps")
 
-        @app.route(u"/namespaces/<namespace>/configmaps/<configmap>", methods=[u"PUT"])
+        @app.route(
+            u"/namespaces/<namespace>/configmaps/<configmap>",
+            methods=[u"PUT"]
+        )
         def replace_configmap(self, request, namespace, configmap):
             """
             Replace an existing ConfigMap.
@@ -581,13 +583,19 @@ class _Kubernetes(object):
                 configmap,
             )
 
-        @app.route(u"/namespaces/<namespace>/configmaps/<configmap>", methods=[u"DELETE"])
+        @app.route(
+            u"/namespaces/<namespace>/configmaps/<configmap>",
+            methods=[u"DELETE"]
+        )
         def delete_configmap(self, request, namespace, configmap):
             """
             Delete one ConfigMap by name.
             """
             return self._delete(
-                request, u"configmaps", namespace, configmap,
+                request,
+                u"configmaps",
+                namespace,
+                configmap,
             )
 
         @app.route(u"/namespaces/<namespace>/services", methods=[u"POST"])
@@ -597,7 +605,9 @@ class _Kubernetes(object):
             """
             return self._create(request, u"services")
 
-        @app.route(u"/namespaces/<namespace>/services/<service>", methods=[u"PUT"])
+        @app.route(
+            u"/namespaces/<namespace>/services/<service>", methods=[u"PUT"]
+        )
         def replace_service(self, request, namespace, service):
             """
             Replace an existing Service.
@@ -616,7 +626,9 @@ class _Kubernetes(object):
             """
             return self._list(request, None, u"services")
 
-        @app.route(u"/namespaces/<namespace>/services/<service>", methods=[u"GET"])
+        @app.route(
+            u"/namespaces/<namespace>/services/<service>", methods=[u"GET"]
+        )
         def get_service(self, request, namespace, service):
             """
             Get one Service by name.
@@ -628,16 +640,22 @@ class _Kubernetes(object):
                 service,
             )
 
-        @app.route(u"/namespaces/<namespace>/services/<service>", methods=[u"DELETE"])
+        @app.route(
+            u"/namespaces/<namespace>/services/<service>", methods=[u"DELETE"]
+        )
         def delete_service(self, request, namespace, service):
             """
             Delete one Service by name.
             """
             return self._delete(
-                request, u"services", namespace, service,
+                request,
+                u"services",
+                namespace,
+                service,
             )
 
     with app.subroute(u"/apis/extensions/v1beta1") as app:
+
         @app.route(u"/namespaces/<namespace>/deployments", methods=[u"POST"])
         def create_deployment(self, request, namespace):
             """
@@ -648,7 +666,10 @@ class _Kubernetes(object):
                 u"deployments",
             )
 
-        @app.route(u"/namespaces/<namespace>/deployments/<deployment>", methods=[u"PUT"])
+        @app.route(
+            u"/namespaces/<namespace>/deployments/<deployment>",
+            methods=[u"PUT"]
+        )
         def replace_deployment(self, request, namespace, deployment):
             """
             Replace an existing Deployment.
@@ -667,7 +688,10 @@ class _Kubernetes(object):
             """
             return self._list(request, None, u"deployments")
 
-        @app.route(u"/namespaces/<namespace>/deployments/<deployment>", methods=[u"GET"])
+        @app.route(
+            u"/namespaces/<namespace>/deployments/<deployment>",
+            methods=[u"GET"]
+        )
         def get_deployment(self, request, namespace, deployment):
             """
             Get one Deployment by name.
@@ -679,13 +703,19 @@ class _Kubernetes(object):
                 deployment,
             )
 
-        @app.route(u"/namespaces/<namespace>/deployments/<deployment>", methods=[u"DELETE"])
+        @app.route(
+            u"/namespaces/<namespace>/deployments/<deployment>",
+            methods=[u"DELETE"]
+        )
         def delete_deployment(self, request, namespace, deployment):
             """
             Delete one Deployment by name.
             """
             return self._delete(
-                request, u"deployments", namespace, deployment,
+                request,
+                u"deployments",
+                namespace,
+                deployment,
             )
 
         @app.route(u"/namespaces/<namespace>/replicasets", methods=[u"POST"])
@@ -698,7 +728,10 @@ class _Kubernetes(object):
                 u"replicasets",
             )
 
-        @app.route(u"/namespaces/<namespace>/replicasets/<replicaset>", methods=[u"PUT"])
+        @app.route(
+            u"/namespaces/<namespace>/replicasets/<replicaset>",
+            methods=[u"PUT"]
+        )
         def replace_replicaset(self, request, namespace, replicaset):
             """
             Replace an existing ReplicaSet.
@@ -717,7 +750,10 @@ class _Kubernetes(object):
             """
             return self._list(request, None, u"replicasets")
 
-        @app.route(u"/namespaces/<namespace>/replicasets/<replicaset>", methods=[u"GET"])
+        @app.route(
+            u"/namespaces/<namespace>/replicasets/<replicaset>",
+            methods=[u"GET"]
+        )
         def get_replicaset(self, request, namespace, replicaset):
             """
             Get one ReplicaSet by name.
@@ -729,11 +765,17 @@ class _Kubernetes(object):
                 replicaset,
             )
 
-        @app.route(u"/namespaces/<namespace>/replicasets/<replicaset>", methods=[u"DELETE"])
+        @app.route(
+            u"/namespaces/<namespace>/replicasets/<replicaset>",
+            methods=[u"DELETE"]
+        )
         def delete_replicaset(self, request, namespace, replicaset):
             """
             Delete one ReplicaSet by name.
             """
             return self._delete(
-                request, u"replicasets", namespace, replicaset,
+                request,
+                u"replicasets",
+                namespace,
+                replicaset,
             )

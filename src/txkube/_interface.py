@@ -1,6 +1,5 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Explicit interface definitions for txkube.
 """
@@ -11,7 +10,7 @@ from zope.interface import Attribute, Interface
 class IObject(Interface):
     """
     ``IObject`` providers model `Kubernetes objects
-    <https://github.com/kubernetes/community/blob/master/contributors/devel/api-conventions.md#objects>`_.
+    <https://github.com/kubernetes/community/blob/master/contributors/devel/api-conventions.md#objects>`_.  # noqa E501
     """
     kind = Attribute(
         """The Kubernetes *kind* of this object.  For example, ``u"Namespace"``."""
@@ -37,7 +36,6 @@ class IObject(Interface):
         """
 
 
-
 class IKubernetes(Interface):
     """
     An ``IKubernetes`` provider represents a particular Kubernetes deployment.
@@ -60,12 +58,12 @@ class IKubernetes(Interface):
         """
 
 
-
 class IKubernetesClient(Interface):
     """
     An ``IKubernetesClient`` provider allows access to the API of a particular
     Kubernetes deployment.
     """
+
     def list(kind):
         """
         Retrieve objects of the given kind.
@@ -76,7 +74,6 @@ class IKubernetesClient(Interface):
         :return Deferred(ObjectList): A collection of the matching objects.
         """
 
-
     def create(obj):
         """
         Create a new object in the given namespace.
@@ -85,7 +82,6 @@ class IKubernetesClient(Interface):
 
         :return Deferred(IObject): A description of the created object.
         """
-
 
     def replace(obj):
         """
@@ -98,7 +94,6 @@ class IKubernetesClient(Interface):
         :return Deferred(IObject): A description of the created object.
         """
 
-
     def get(obj):
         """
         Get a single object.
@@ -108,7 +103,6 @@ class IKubernetesClient(Interface):
 
         :return Deferred(IObject): A description of the retrieved object.
         """
-
 
     def delete(obj):
         """

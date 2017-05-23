@@ -1,42 +1,39 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 A Kubernetes client which uses Twisted to interact with Kubernetes
 via HTTP.
 """
 
+from json import dumps, loads
 from os.path import expanduser
-from json import loads, dumps
-
-from zope.interface import implementer
 
 import attr
 from attr import validators
-
-from pem import parse
-
-from twisted.python.reflect import namedAny
-from twisted.python.failure import Failure
-from twisted.python.url import URL
-from twisted.python.filepath import FilePath
-
-from twisted.internet.defer import succeed
-
-from twisted.web.iweb import IBodyProducer, IAgent
-from twisted.web.http import OK, CREATED
-from twisted.web.client import Agent, readBody
-
 from eliot import Message, start_action
 from eliot.twisted import DeferredContext
-
+from pem import parse
 from pykube import KubeConfig
+from twisted.internet.defer import succeed
+from twisted.python.failure import Failure
+from twisted.python.filepath import FilePath
+from twisted.python.reflect import namedAny
+from twisted.python.url import URL
+from twisted.web.client import Agent, readBody
+from twisted.web.http import CREATED, OK
+from twisted.web.iweb import IAgent, IBodyProducer
+from zope.interface import implementer
 
 from . import (
-    IObject, IKubernetes, IKubernetesClient, KubernetesError,
-    iobject_from_raw, iobject_to_raw,
+    IKubernetes,
+    IKubernetesClient,
+    IObject,
+    KubernetesError,
     authenticate_with_certificate_chain,
+    iobject_from_raw,
+    iobject_to_raw,
 )
+
 
 def network_kubernetes(**kw):
     """
@@ -54,7 +51,6 @@ def network_kubernetes(**kw):
     :return IKubernetes: The Kubernetes service.
     """
     return _NetworkKubernetes(**kw)
-
 
 
 def network_kubernetes_from_context(reactor, context, path=None):
@@ -87,7 +83,11 @@ def network_kubernetes_from_context(reactor, context, path=None):
     [client_key] = parse(user[u"client-key"].bytes())
 
     agent = authenticate_with_certificate_chain(
-        reactor, base_url, client_chain, client_key, ca_cert,
+        reactor,
+        base_url,
+        client_chain,
+        client_key,
+        ca_cert,
     )
 
     return network_kubernetes(
@@ -123,7 +123,6 @@ class _BytesProducer(object):
         pass
 
 
-
 @implementer(IKubernetesClient)
 @attr.s(frozen=True)
 class _NetworkClient(object):
@@ -140,14 +139,15 @@ class _NetworkClient(object):
         )
         with action.context():
             d = self.agent.request(
-                method, url.asText().encode("ascii"), headers, bodyProducer,
+                method,
+                url.asText().encode("ascii"),
+                headers,
+                bodyProducer,
             )
             return DeferredContext(d).addActionFinish()
 
-
     def _get(self, url):
         return self._request(b"GET", url)
-
 
     def _delete(self, url, options):
         bodyProducer = None
@@ -155,18 +155,19 @@ class _NetworkClient(object):
             bodyProducer = _BytesProducer(dumps(iobject_to_raw(options)))
         return self._request(b"DELETE", url, bodyProducer=bodyProducer)
 
-
     def _post(self, url, obj):
         return self._request(
-            b"POST", url, bodyProducer=_BytesProducer(dumps(obj)),
+            b"POST",
+            url,
+            bodyProducer=_BytesProducer(dumps(obj)),
         )
-
 
     def _put(self, url, obj):
         return self._request(
-            b"PUT", url, bodyProducer=_BytesProducer(dumps(obj)),
+            b"PUT",
+            url,
+            bodyProducer=_BytesProducer(dumps(obj)),
         )
-
 
     def create(self, obj):
         """
@@ -180,13 +181,12 @@ class _NetworkClient(object):
             document = iobject_to_raw(obj)
             Message.log(submitted_object=document)
             d = DeferredContext(self._post(url, document))
-            d.addCallback(check_status, (CREATED,))
+            d.addCallback(check_status, (CREATED, ))
             d.addCallback(readBody)
             d.addCallback(loads)
             d.addCallback(log_response_object, action)
             d.addCallback(iobject_from_raw)
             return d.addActionFinish()
-
 
     def replace(self, obj):
         """
@@ -200,13 +200,12 @@ class _NetworkClient(object):
             document = iobject_to_raw(obj)
             Message.log(submitted_object=document)
             d = DeferredContext(self._put(url, document))
-            d.addCallback(check_status, (OK,))
+            d.addCallback(check_status, (OK, ))
             d.addCallback(readBody)
             d.addCallback(loads)
             d.addCallback(log_response_object, action)
             d.addCallback(iobject_from_raw)
             return d.addActionFinish()
-
 
     def get(self, obj):
         """
@@ -224,13 +223,12 @@ class _NetworkClient(object):
         with action.context():
             url = self.kubernetes.base_url.child(*object_location(obj))
             d = DeferredContext(self._get(url))
-            d.addCallback(check_status, (OK,))
+            d.addCallback(check_status, (OK, ))
             d.addCallback(readBody)
             d.addCallback(loads)
             d.addCallback(log_response_object, action)
             d.addCallback(iobject_from_raw)
             return d.addActionFinish()
-
 
     def delete(self, obj, options=None):
         """
@@ -248,11 +246,10 @@ class _NetworkClient(object):
         with action.context():
             url = self.kubernetes.base_url.child(*object_location(obj))
             d = DeferredContext(self._delete(url, options))
-            d.addCallback(check_status, (OK,))
+            d.addCallback(check_status, (OK, ))
             d.addCallback(readBody)
             d.addCallback(lambda raw: None)
             return d.addActionFinish()
-
 
     def list(self, kind):
         """
@@ -266,11 +263,10 @@ class _NetworkClient(object):
         with action.context():
             url = self.kubernetes.base_url.child(*collection_location(kind))
             d = DeferredContext(self._get(url))
-            d.addCallback(check_status, (OK,))
+            d.addCallback(check_status, (OK, ))
             d.addCallback(readBody)
             d.addCallback(lambda body: iobject_from_raw(loads(body)))
             return d.addActionFinish()
-
 
 
 def object_location(obj):
@@ -282,8 +278,7 @@ def object_location(obj):
     :return tuple[unicode]: Some path segments to stick on to a base URL top
         construct the location for the given object.
     """
-    return collection_location(obj) + (obj.metadata.name,)
-
+    return collection_location(obj) + (obj.metadata.name, )
 
 
 version_to_segments = {
@@ -321,11 +316,10 @@ def collection_location(obj):
 
     if namespace is None:
         # If there's no namespace, look in the un-namespaced area.
-        return prefix + (collection,)
+        return prefix + (collection, )
 
     # If there is, great, look there.
     return prefix + (u"namespaces", namespace, collection)
-
 
 
 @implementer(IKubernetes)
@@ -338,12 +332,12 @@ class _NetworkKubernetes(object):
     """
     base_url = attr.ib(validator=validators.instance_of(URL))
     _agent = attr.ib(
-        default=attr.Factory(lambda: Agent(namedAny("twisted.internet.reactor"))),
+        default=attr.
+        Factory(lambda: Agent(namedAny("twisted.internet.reactor"))),
     )
 
     def client(self):
         return _NetworkClient(self, self._agent)
-
 
 
 def log_response_object(document, action):

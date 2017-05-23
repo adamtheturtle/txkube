@@ -1,25 +1,20 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Kubernetes authentication support.
 """
 
 import pem
-
-from OpenSSL.crypto import FILETYPE_PEM, Error as OpenSSLError
-
-from zope.interface import implementer
-
-from pyrsistent import CheckedPVector, PClass, field, pmap_field
-
-from twisted.python.url import URL
-from twisted.internet import ssl
-from twisted.web.iweb import IPolicyForHTTPS, IAgent
-from twisted.web.http_headers import Headers
-from twisted.web.client import Agent
-
+from OpenSSL.crypto import Error as OpenSSLError
+from OpenSSL.crypto import FILETYPE_PEM
 from pykube import KubeConfig
+from pyrsistent import CheckedPVector, PClass, field, pmap_field
+from twisted.internet import ssl
+from twisted.python.url import URL
+from twisted.web.client import Agent
+from twisted.web.http_headers import Headers
+from twisted.web.iweb import IAgent, IPolicyForHTTPS
+from zope.interface import implementer
 
 from ._invariants import instance_of
 
@@ -29,7 +24,6 @@ class Certificates(CheckedPVector):
     A vector of ``pem.Certificate`` instances.
     """
     __type__ = pem.Certificate
-
 
 
 class Chain(PClass):
@@ -60,7 +54,6 @@ class Chain(PClass):
         return (True, "")
 
 
-
 def pairwise(iterable):
     """
     Generate consecutive pairs of elements from the given iterable.
@@ -73,7 +66,6 @@ def pairwise(iterable):
     for element in iterator:
         yield first, element
         first = element
-
 
 
 class TLSCredentials(PClass):
@@ -90,8 +82,7 @@ class TLSCredentials(PClass):
     def __invariant__(self):
         certs = list(
             ssl.Certificate.loadPEM(cert.as_bytes())
-            for cert
-            in self.chain.certificates
+            for cert in self.chain.certificates
         )
         key = ssl.KeyPair.load(self.key.as_bytes(), FILETYPE_PEM)
 
@@ -141,12 +132,12 @@ def pick_cert_for_twisted(netloc, possible):
     key = ssl.KeyPair.load(creds.key.as_bytes(), FILETYPE_PEM)
     return (
         ssl.PrivateCertificate.load(
-            creds.chain.certificates[0].as_bytes(), key, FILETYPE_PEM,
-        ),
-        tuple(
+            creds.chain.certificates[0].as_bytes(),
+            key,
+            FILETYPE_PEM,
+        ), tuple(
             ssl.Certificate.load(cert.as_bytes(), FILETYPE_PEM)
-            for cert
-            in creds.chain.certificates[1:]
+            for cert in creds.chain.certificates[1:]
         ),
     )
 
@@ -187,17 +178,19 @@ class ClientCertificatePolicyForHTTPS(PClass):
     :ivar trust_roots: All available certificate authority certificates.
     """
     credentials = pmap_field(
-        NetLocation, TLSCredentials,
+        NetLocation,
+        TLSCredentials,
     )
 
     trust_roots = pmap_field(
-        NetLocation, pem.Certificate,
+        NetLocation,
+        pem.Certificate,
     )
 
     def creatorForNetloc(self, hostname, port):
         """
-        Pick from amongst client certs and ca certs to create a proper TLS context
-        factory.
+        Pick from amongst client certs and ca certs to create a proper TLS
+        context factory.
 
         :see: ``twisted.web.iweb.IPolicyForHTTPS``
         """
@@ -205,7 +198,8 @@ class ClientCertificatePolicyForHTTPS(PClass):
 
         netloc = NetLocation(host=hostname, port=port)
         client_cert, extra_cert_chain = pick_cert_for_twisted(
-            netloc, self.credentials,
+            netloc,
+            self.credentials,
         )
         trust_root = pick_trust_for_twisted(netloc, self.trust_roots)
 
@@ -220,13 +214,16 @@ class ClientCertificatePolicyForHTTPS(PClass):
             clientCertificate=client_cert,
             trustRoot=trust_root,
             extraCertificateOptions=dict(
-                extraCertChain=tuple(cert.original for cert in extra_cert_chain),
+                extraCertChain=tuple(
+                    cert.original for cert in extra_cert_chain
+                ),
             ),
         )
 
 
-
-def authenticate_with_certificate_chain(reactor, base_url, client_chain, client_key, ca_cert):
+def authenticate_with_certificate_chain(
+    reactor, base_url, client_chain, client_key, ca_cert
+):
     """
     Create an ``IAgent`` which can issue authenticated requests to a
     particular Kubernetes server using a client certificate.
@@ -251,15 +248,15 @@ def authenticate_with_certificate_chain(reactor, base_url, client_chain, client_
     """
     if base_url.scheme != u"https":
         raise ValueError(
-            "authenticate_with_certificate() makes sense for HTTPS, not {!r}".format(
-                base_url.scheme
-            ),
+            "authenticate_with_certificate() makes sense for HTTPS, not {!r}".
+            format(base_url.scheme),
         )
 
     netloc = NetLocation(host=base_url.host, port=base_url.port)
     policy = ClientCertificatePolicyForHTTPS(
         credentials={
-            netloc: TLSCredentials(
+            netloc:
+            TLSCredentials(
                 chain=Chain(certificates=Certificates(client_chain)),
                 key=client_key,
             ),
@@ -271,17 +268,21 @@ def authenticate_with_certificate_chain(reactor, base_url, client_chain, client_
     return Agent(reactor, contextFactory=policy)
 
 
-
-def authenticate_with_certificate(reactor, base_url, client_cert, client_key, ca_cert):
+def authenticate_with_certificate(
+    reactor, base_url, client_cert, client_key, ca_cert
+):
     """
     See ``authenticate_with_certificate_chain``.
 
     :param pem.Certificate client_cert: The client certificate to use.
     """
     return authenticate_with_certificate_chain(
-        reactor, base_url, [client_cert], client_key, ca_cert,
+        reactor,
+        base_url,
+        [client_cert],
+        client_key,
+        ca_cert,
     )
-
 
 
 @implementer(IAgent)
@@ -308,7 +309,6 @@ class HeaderInjectingAgent(PClass):
         for k, vs in self._to_inject.getAllRawHeaders():
             headers.setRawHeaders(k, vs)
         return self._agent.request(method, url, headers, bodyProducer)
-
 
 
 def authenticate_with_serviceaccount(reactor, **kw):
@@ -353,7 +353,9 @@ def authenticate_with_serviceaccount(reactor, **kw):
     )
 
     agent = HeaderInjectingAgent(
-        _to_inject=Headers({u"authorization": [u"Bearer {}".format(token)]}),
+        _to_inject=Headers({
+            u"authorization": [u"Bearer {}".format(token)]
+        }),
         _agent=Agent(reactor, contextFactory=policy),
     )
     return agent

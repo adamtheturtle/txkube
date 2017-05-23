@@ -1,44 +1,46 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Tests for ``txkube._model``.
 """
 
-from json import loads, dumps
+from json import dumps, loads
 
+from hypothesis import assume, given
+from hypothesis.strategies import choices
+from pyrsistent import freeze
+from testtools.matchers import (
+    Contains,
+    ContainsAll,
+    Equals,
+    Is,
+    IsInstance,
+    MatchesStructure,
+    Not,
+    raises,
+)
 from zope.interface.verify import verifyObject
 
-from pyrsistent import freeze
-
-from testtools.matchers import (
-    Equals, MatchesStructure, Not, Is, Contains, ContainsAll, raises,
-    IsInstance,
-)
-
-from hypothesis import given, assume
-from hypothesis.strategies import choices
-
-from ..testing import TestCase
-from ..testing.matchers import PClassEquals, MappingEquals
-from ..testing.strategies import (
-    iobjects,
-    namespacelists,
-    objectcollections,
-)
-
 from .. import (
-    UnrecognizedVersion, UnrecognizedKind,
-    IObject, v1, v1beta1, iobject_to_raw, iobject_from_raw,
+    IObject,
+    UnrecognizedKind,
+    UnrecognizedVersion,
+    iobject_from_raw,
+    iobject_to_raw,
+    v1,
+    v1beta1,
 )
-
 from .._model import set_if_none
+from ..testing import TestCase
+from ..testing.matchers import MappingEquals, PClassEquals
+from ..testing.strategies import iobjects, namespacelists, objectcollections
 
 
 class SerializationTests(TestCase):
     """
     Tests for ``iobject_to_raw`` and ``iobject_from_raw``.
     """
+
     def test_v1_apiVersion(self):
         """
         Objects from ``v1`` serialize with an *apiVersion* of ``u"v1"``.
@@ -53,7 +55,6 @@ class SerializationTests(TestCase):
             iobject_from_raw(raw),
             IsInstance(v1.ComponentStatus),
         )
-
 
     def test_v1beta1_apiVersion(self):
         """
@@ -72,18 +73,17 @@ class SerializationTests(TestCase):
         )
 
 
-
 class IObjectTests(TestCase):
     """
     Tests for ``IObject``.
     """
+
     @given(obj=iobjects())
     def test_interface(self, obj):
         """
         The object provides ``IObject``.
         """
         verifyObject(IObject, obj)
-
 
     @given(obj=iobjects())
     def test_serialization_roundtrip(self, obj):
@@ -116,7 +116,6 @@ class IObjectTests(TestCase):
         deserialized = loads(serialized)
         self.expectThat(marshalled, MappingEquals(deserialized))
 
-
     @given(objectcollections())
     def test_empty_collection(self, collection):
         """
@@ -125,7 +124,6 @@ class IObjectTests(TestCase):
         """
         self.expectThat(collection.set(items=None).items, Equals([]))
         self.expectThat(collection.set(items=[]).items, Equals([]))
-
 
     def test_unknown_version(self):
         """
@@ -140,7 +138,6 @@ class IObjectTests(TestCase):
             lambda: iobject_from_raw(obj),
             raises(UnrecognizedVersion(obj[u"apiVersion"], obj)),
         )
-
 
     def test_unknown_kind(self):
         """
@@ -158,11 +155,11 @@ class IObjectTests(TestCase):
         )
 
 
-
 class NamespaceTests(TestCase):
     """
     Other tests for ``Namespace``.
     """
+
     def test_default(self):
         """
         ``Namespace.default`` returns the *default* namespace.
@@ -175,7 +172,6 @@ class NamespaceTests(TestCase):
                 ),
             ),
         )
-
 
     def test_fill_defaults(self):
         """
@@ -197,11 +193,11 @@ class NamespaceTests(TestCase):
         )
 
 
-
 class NamespaceListTests(TestCase):
     """
     Tests for ``NamespaceList``.
     """
+
     @given(collection=namespacelists(), choose=choices())
     def test_remove(self, collection, choose):
         """
@@ -213,7 +209,6 @@ class NamespaceListTests(TestCase):
         removed = collection.remove(item)
         self.assertThat(removed.items, Not(Contains(item)))
 
-
     @given(collection=namespacelists(), choose=choices())
     def test_item_by_name(self, collection, choose):
         """
@@ -222,7 +217,9 @@ class NamespaceListTests(TestCase):
         """
         assume(len(collection.items) > 0)
         for item in collection.items:
-            self.expectThat(collection.item_by_name(item.metadata.name), Is(item))
+            self.expectThat(
+                collection.item_by_name(item.metadata.name), Is(item)
+            )
 
         item = choose(collection.items)
         collection = collection.remove(item)
@@ -232,11 +229,11 @@ class NamespaceListTests(TestCase):
         )
 
 
-
 class SetIfNoneTests(TestCase):
     """
     Tests for ``set_if_none``.
     """
+
     def test_none(self):
         """
         If the value for transformation is ``None``, the result contains the new
@@ -245,7 +242,6 @@ class SetIfNoneTests(TestCase):
         structure = freeze({u"foo": None})
         transformed = structure.transform([u"foo"], set_if_none(u"bar"))
         self.assertThat(transformed[u"foo"], Equals(u"bar"))
-
 
     def test_not_none(self):
         """

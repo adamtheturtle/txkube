@@ -1,16 +1,13 @@
 # Copyright Least Authority Enterprises.
 # See LICENSE for details.
-
 """
 Tests for ``txkube.testing._eliot``.
 """
 
-from eliot import start_action, add_destination, remove_destination
-
+from eliot import add_destination, remove_destination, start_action
 from testtools.matchers import Contains
 
 from .. import TestCase
-
 from .._eliot import _eliottree
 
 
@@ -18,6 +15,7 @@ class EliotTreeTests(TestCase):
     """
     Tests for ``txkube.testing._eliot._eliottree``.
     """
+
     def test_tree(self):
         """
         ``_eliottree`` returns a ``bytes`` string containing a rendered tree of

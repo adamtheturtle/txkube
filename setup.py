@@ -7,7 +7,7 @@ import setuptools
 
 _metadata = {}
 with open("src/txkube/_metadata.py") as f:
-    exec(f.read(), _metadata)
+    exec (f.read(), _metadata)
 with open("README.rst") as f:
     _metadata["description"] = f.read()
 

@@ -4,7 +4,8 @@
 __all__ = [
     "strategies",
     "integration",
-    "TestCase", "AsynchronousDeferredRunTest",
+    "TestCase",
+    "AsynchronousDeferredRunTest",
 ]
 
 from ._testcase import TestCase, AsynchronousDeferredRunTest

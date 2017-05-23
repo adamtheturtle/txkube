@@ -2,42 +2,42 @@
 # See LICENSE for details.
 
 import os
+from datetime import datetime, timedelta
 from itertools import count, islice
 from uuid import uuid4
-from datetime import datetime, timedelta
 
 import pem
-
-from pyrsistent import InvariantException
-
-from fixtures import TempDir
-
-from testtools.matchers import AfterPreprocessing, Equals, Contains, IsInstance, raises
-
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
-from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.x509 import (
-    CertificateBuilder,
-    SubjectAlternativeName,
     BasicConstraints,
+    CertificateBuilder,
     DNSName,
     Name,
     NameAttribute,
+    SubjectAlternativeName,
 )
-from cryptography.hazmat.backends import default_backend
-
-from twisted.python.filepath import FilePath
+from cryptography.x509.oid import NameOID
+from fixtures import TempDir
+from pyrsistent import InvariantException
+from testtools.matchers import (
+    AfterPreprocessing,
+    Contains,
+    Equals,
+    IsInstance,
+    raises,
+)
 from twisted.internet.protocol import Factory
-from twisted.web.http_headers import Headers
+from twisted.python.filepath import FilePath
 from twisted.test.iosim import ConnectionCompleter
 from twisted.test.proto_helpers import AccumulatingProtocol, MemoryReactor
+from twisted.web.http_headers import Headers
 
-from ..testing import TestCase
-
-from .._authentication import Certificates, Chain, pairwise
 from .. import authenticate_with_serviceaccount
+from .._authentication import Certificates, Chain, pairwise
+from ..testing import TestCase
 
 # Just an arbitrary certificate pulled off the internet.  Details ought not
 # matter.  Retrieved using:
@@ -68,10 +68,12 @@ b8ravHNjkOR/ez4iyz0H7V84dJzjA1BOoa+Y7mHyhD8S
 -----END CERTIFICATE-----
 """
 
+
 class AuthenticateWithServiceAccountTests(TestCase):
     """
     Tests for ``authenticate_with_serviceaccount``.
     """
+
     def _authorized_request(self, token, headers):
         """
         Get an agent using ``authenticate_with_serviceaccount`` and issue a
@@ -94,14 +96,17 @@ class AuthenticateWithServiceAccountTests(TestCase):
         serviceaccount.child(b"token").setContent(token)
 
         self.patch(
-            os, "environ", {
+            os,
+            "environ",
+            {
                 b"KUBERNETES_SERVICE_HOST": b"example.invalid.",
                 b"KUBERNETES_SERVICE_PORT": b"443",
             },
         )
 
         agent = authenticate_with_serviceaccount(
-            reactor, path=serviceaccount.path,
+            reactor,
+            path=serviceaccount.path,
         )
         agent.request(b"GET", b"http://example.invalid.", headers)
 
@@ -114,7 +119,6 @@ class AuthenticateWithServiceAccountTests(TestCase):
 
         return server.data
 
-
     def test_bearer_token_authorization(self):
         """
         The ``IAgent`` returned adds an *Authorization* header to each request it
@@ -126,9 +130,10 @@ class AuthenticateWithServiceAccountTests(TestCase):
         # Sure would be nice to have an HTTP parser.
         self.assertThat(
             request_bytes,
-            Contains(u"Authorization: Bearer {}".format(token).encode("ascii")),
+            Contains(
+                u"Authorization: Bearer {}".format(token).encode("ascii")
+            ),
         )
-
 
     def test_other_headers_preserved(self):
         """
@@ -140,13 +145,14 @@ class AuthenticateWithServiceAccountTests(TestCase):
         request_bytes = self._authorized_request(token=token, headers=headers)
         self.expectThat(
             request_bytes,
-            Contains(u"Authorization: Bearer {}".format(token).encode("ascii")),
+            Contains(
+                u"Authorization: Bearer {}".format(token).encode("ascii")
+            ),
         )
         self.expectThat(
             request_bytes,
             Contains(b"Foo: bar"),
         )
-
 
     def test_missing_ca_certificate(self):
         """
@@ -161,7 +167,9 @@ class AuthenticateWithServiceAccountTests(TestCase):
         serviceaccount.child(b"token").setContent(b"token")
 
         self.patch(
-            os, "environ", {
+            os,
+            "environ",
+            {
                 b"KUBERNETES_SERVICE_HOST": b"example.invalid.",
                 b"KUBERNETES_SERVICE_PORT": b"443",
             },
@@ -169,11 +177,10 @@ class AuthenticateWithServiceAccountTests(TestCase):
 
         self.assertThat(
             lambda: authenticate_with_serviceaccount(
-                MemoryReactor(), path=serviceaccount.path,
-            ),
+                MemoryReactor(),
+                path=serviceaccount.path, ),
             raises(ValueError("No certificate authority certificate found.")),
         )
-
 
     def test_bad_ca_certificate(self):
         """
@@ -192,7 +199,9 @@ class AuthenticateWithServiceAccountTests(TestCase):
         serviceaccount.child(b"token").setContent(b"token")
 
         self.patch(
-            os, "environ", {
+            os,
+            "environ",
+            {
                 b"KUBERNETES_SERVICE_HOST": b"example.invalid.",
                 b"KUBERNETES_SERVICE_PORT": b"443",
             },
@@ -200,20 +209,20 @@ class AuthenticateWithServiceAccountTests(TestCase):
 
         self.assertThat(
             lambda: authenticate_with_serviceaccount(
-                MemoryReactor(), path=serviceaccount.path,
-            ),
-            raises(ValueError(
-                "Invalid certificate authority certificate found.",
-                "[('PEM routines', 'PEM_read_bio', 'bad base64 decode')]",
-            )),
-        )
-
+                MemoryReactor(),
+                path=serviceaccount.path, ),
+            raises(
+                ValueError(
+                    "Invalid certificate authority certificate found.",
+                    "[('PEM routines', 'PEM_read_bio', 'bad base64 decode')]",
+                )), )
 
 
 class PairwiseTests(TestCase):
     """
     Tests for ``pairwise``.
     """
+
     def test_pairs(self):
         a = object()
         b = object()
@@ -242,7 +251,6 @@ class PairwiseTests(TestCase):
             AfterPreprocessing(list, Equals([(a, b), (b, c), (c, d)])),
         )
 
-
     def test_lazy(self):
         """
         ``pairwise`` only consumes as much of its iterable argument as necessary
@@ -254,11 +262,11 @@ class PairwiseTests(TestCase):
         )
 
 
-
 class ChainTests(TestCase):
     """
     Tests for ``Chain``.
     """
+
     def test_empty(self):
         """
         A ``Chain`` must have certificates.
@@ -267,7 +275,6 @@ class ChainTests(TestCase):
             InvariantException,
             lambda: Chain(certificates=Certificates([])),
         )
-
 
     def test_ordering(self):
         """
@@ -278,13 +285,11 @@ class ChainTests(TestCase):
                 public_exponent=65537,
                 key_size=512,
                 backend=default_backend(),
-            )
-            for i in range(3)
+            ) for i in range(3)
         )
 
         def cert(issuer, subject, pubkey, privkey, ca):
-            builder = CertificateBuilder(
-            ).issuer_name(
+            builder = CertificateBuilder().issuer_name(
                 Name([NameAttribute(NameOID.COMMON_NAME, issuer)]),
             ).subject_name(
                 Name([NameAttribute(NameOID.COMMON_NAME, subject)]),
@@ -297,22 +302,36 @@ class ChainTests(TestCase):
                     BasicConstraints(True, None),
                     critical=True,
                 )
-            return builder.public_key(a_key.public_key(),
-            ).serial_number(1,
-            ).not_valid_before(datetime.utcnow(),
-            ).not_valid_after(datetime.utcnow() + timedelta(seconds=1),
-            ).sign(a_key, SHA256(), default_backend(),
+            return builder.public_key(
+                a_key.public_key(),
+            ).serial_number(
+                1,
+            ).not_valid_before(
+                datetime.utcnow(),
+            ).not_valid_after(
+                datetime.utcnow() + timedelta(seconds=1),
+            ).sign(
+                a_key,
+                SHA256(),
+                default_backend(),
             )
 
-        a_cert = cert(u"a.invalid", u"a.invalid", a_key.public_key(), a_key, True)
-        b_cert = cert(u"a.invalid", u"b.invalid", b_key.public_key(), a_key, True)
-        c_cert = cert(u"b.invalid", u"c.invalid", c_key.public_key(), b_key, False)
+        a_cert = cert(
+            u"a.invalid", u"a.invalid", a_key.public_key(), a_key, True
+        )
+        b_cert = cert(
+            u"a.invalid", u"b.invalid", b_key.public_key(), a_key, True
+        )
+        c_cert = cert(
+            u"b.invalid", u"c.invalid", c_key.public_key(), b_key, False
+        )
 
-        a, b, c = pem.parse("\n".join(
-            cert.public_bytes(serialization.Encoding.PEM)
-            for cert
-            in (a_cert, b_cert, c_cert)
-        ))
+        a, b, c = pem.parse(
+            "\n".join(
+                cert.public_bytes(serialization.Encoding.PEM)
+                for cert in (a_cert, b_cert, c_cert)
+            )
+        )
 
         # a is not signed by b.  Rather, the reverse.  Therefore this ordering
         # is an error.
